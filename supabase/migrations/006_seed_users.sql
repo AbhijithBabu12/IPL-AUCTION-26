@@ -2,77 +2,48 @@
 -- Password for all accounts: 12345678
 -- Run this in Supabase SQL editor ONCE.
 
-insert into auth.users (
-  id,
-  instance_id,
-  email,
-  encrypted_password,
-  email_confirmed_at,
-  raw_app_meta_data,
-  raw_user_meta_data,
-  created_at,
-  updated_at,
-  role,
-  aud
-)
-values
-  (
-    gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
+do $$
+declare
+  emails text[] := array[
     'sherlockholmes221b715@gmail.com',
-    crypt('12345678', gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}',
-    '{"full_name":"Wayanad Tarzans"}',
-    now(), now(), 'authenticated', 'authenticated'
-  ),
-  (
-    gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
     'abhijithbabu855@gmail.com',
-    crypt('12345678', gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}',
-    '{"full_name":"OPM"}',
-    now(), now(), 'authenticated', 'authenticated'
-  ),
-  (
-    gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
     'sonushajim@gmail.com',
-    crypt('12345678', gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}',
-    '{"full_name":"Malabar Magic"}',
-    now(), now(), 'authenticated', 'authenticated'
-  ),
-  (
-    gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
     'lonewolf6996a@gmail.com',
-    crypt('12345678', gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}',
-    '{"full_name":"Kerala Indians"}',
-    now(), now(), 'authenticated', 'authenticated'
-  ),
-  (
-    gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
     'abiddileep7@gmail.com',
-    crypt('12345678', gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}',
-    '{"full_name":"Mumbai Indians"}',
-    now(), now(), 'authenticated', 'authenticated'
-  ),
-  (
-    gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
     'gpy120643@gmail.com',
-    crypt('12345678', gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}',
-    '{"full_name":"Goated Super Kings"}',
-    now(), now(), 'authenticated', 'authenticated'
-  ),
-  (
-    gen_random_uuid(), '00000000-0000-0000-0000-000000000000',
-    'swabeehca@gmail.com',
-    crypt('12345678', gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}',
-    '{"full_name":"Kerala Blasters"}',
-    now(), now(), 'authenticated', 'authenticated'
-  )
-on conflict (email) do nothing;
+    'swabeehca@gmail.com'
+  ];
+  names text[] := array[
+    'Wayanad Tarzans',
+    'OPM',
+    'Malabar Magic',
+    'Kerala Indians',
+    'Mumbai Indians',
+    'Goated Super Kings',
+    'Kerala Blasters'
+  ];
+  i int;
+begin
+  for i in 1..array_length(emails, 1) loop
+    if not exists (select 1 from auth.users where email = emails[i]) then
+      insert into auth.users (
+        id, instance_id, email, encrypted_password,
+        email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+        created_at, updated_at, role, aud
+      ) values (
+        gen_random_uuid(),
+        '00000000-0000-0000-0000-000000000000',
+        emails[i],
+        crypt('12345678', gen_salt('bf')),
+        now(),
+        '{"provider":"email","providers":["email"]}',
+        json_build_object('full_name', names[i]),
+        now(), now(),
+        'authenticated', 'authenticated'
+      );
+    end if;
+  end loop;
+end $$;
 
 -- Sync into public.users so the app can see them
 insert into public.users (id, email, display_name)
