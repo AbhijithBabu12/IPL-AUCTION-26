@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
@@ -72,6 +73,7 @@ export async function signInWithPasswordAction(formData: FormData) {
   }
 
   await syncUserProfileFromAuthUser(data.user);
+  revalidatePath("/", "layout");
   redirect(next);
 }
 
