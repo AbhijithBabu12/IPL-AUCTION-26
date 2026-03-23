@@ -75,6 +75,12 @@ export async function signInWithPasswordAction(formData: FormData) {
   redirect(next);
 }
 
+export async function signOutAction() {
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}
+
 export async function signUpWithPasswordAction(formData: FormData) {
   const next = sanitizeNextPath(getFormValue(formData, "next"));
 

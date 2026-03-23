@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { signOutAction } from "@/app/login/actions";
 import { CreateRoomForm } from "@/components/lobby/create-room-form";
 import { JoinRoomForm } from "@/components/lobby/join-room-form";
 import { hasBrowserSupabaseEnv, hasServiceRoleEnv } from "@/lib/config";
@@ -79,6 +80,11 @@ export default async function LobbyPage() {
           <Link className="button ghost" href="/">
             Home
           </Link>
+          <form action={signOutAction}>
+            <button className="button ghost" type="submit">
+              Sign out
+            </button>
+          </form>
         </div>
       </div>
 
