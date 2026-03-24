@@ -826,6 +826,17 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 Skip {skipVoteCount}/{localTeams.length}
               </span>
             )}
+            {myOwnedTeam && (
+              <span className="my-team-chip">
+                <span className="my-team-chip-avatar">
+                  {myOwnedTeam.shortCode?.slice(0, 2).toUpperCase() ?? "T"}
+                </span>
+                {myOwnedTeam.name}
+                <span className="my-team-chip-purse">
+                  {formatCurrencyShort(myOwnedTeam.purseRemaining)}
+                </span>
+              </span>
+            )}
           </div>
 
           <div

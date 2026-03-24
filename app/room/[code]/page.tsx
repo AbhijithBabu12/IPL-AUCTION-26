@@ -168,6 +168,51 @@ export default async function RoomPage({
                 <h2>Team upload</h2>
                 <UploadTeamsForm roomCode={snapshot.room.code} />
               </div>
+
+              {/* Admin My Team — same panel as member view */}
+              <div className="panel" style={{ borderColor: "rgba(251,191,36,0.18)", background: "linear-gradient(145deg, rgba(251,191,36,0.05), rgba(10,8,30,0.5))" }}>
+                <h2 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span>My Team</span>
+                  <span className="eyebrow" style={{ fontSize: "0.65rem" }}>Admin</span>
+                </h2>
+                {(() => {
+                  const myTeam = snapshot.teams.find((t) => t.ownerUserId === user.id);
+                  if (myTeam) {
+                    return (
+                      <details className="room-card" style={{ marginTop: "0.5rem", cursor: "pointer", borderColor: "rgba(251,191,36,0.15)" }}>
+                        <summary style={summaryButtonStyle}>
+                          <strong>{myTeam.name}</strong>
+                          <div className="subtle mono">{myTeam.shortCode}</div>
+                          <div className="pill-row" style={{ marginTop: "0.5rem" }}>
+                            <span className="pill highlight">{formatCurrency(myTeam.purseRemaining)}</span>
+                            <span className="pill">Squad limit: {myTeam.squadLimit}</span>
+                          </div>
+                        </summary>
+                        <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)", display: "grid", gap: "0.5rem" }}>
+                          {snapshot.squads.filter(s => s.teamId === myTeam.id).length === 0 ? (
+                            <div className="subtle" style={{ fontSize: "0.9rem" }}>No players bought yet.</div>
+                          ) : (
+                            snapshot.squads.filter(s => s.teamId === myTeam.id).map(s => {
+                              const p = snapshot.players.find(x => x.id === s.playerId);
+                              return (
+                                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
+                                  <span>{p?.name} <span className="subtle" style={{ fontSize: "0.8rem" }}>{p?.role}</span></span>
+                                  <strong style={{ color: "var(--primary-strong)" }}>{formatCurrencyShort(s.purchasePrice)}</strong>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </details>
+                    );
+                  }
+                  return (
+                    <div className="subtle" style={{ fontSize: "0.9rem" }}>
+                      You haven't been assigned a team as admin yet. Use the Team ownership panel below to assign yourself a team.
+                    </div>
+                  );
+                })()}
+              </div>
             </>
           ) : (
             <div className="panel">
