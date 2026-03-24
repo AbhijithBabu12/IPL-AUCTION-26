@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { AppError } from "@/lib/domain/errors";
 import { startNextRoundSchema } from "@/lib/domain/schemas";
 import { readJson, handleRouteError } from "@/lib/server/api";
-import { isMissingPausedRemainingMsColumnError, omitPausedRemainingMs } from "@/lib/server/auction-state";
+import { isMissingColumnError, omitOptionalColumns } from "@/lib/server/auction-state";
 import { requireApiUser } from "@/lib/server/auth";
 import { getAuctionStateOnly, requireRoomAdmin } from "@/lib/server/room";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -77,10 +77,10 @@ export async function POST(
       .update(updateValues)
       .eq("room_id", room.id);
 
-    if (stateError && isMissingPausedRemainingMsColumnError(stateError.message)) {
+    if (stateError && isMissingColumnError(stateError.message)) {
       const retry = await admin
         .from("auction_state")
-        .update(omitPausedRemainingMs(updateValues))
+        .update(omitOptionalColumns(updateValues))
         .eq("room_id", room.id);
       stateError = retry.error;
     }
