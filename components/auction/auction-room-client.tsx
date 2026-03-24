@@ -196,6 +196,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         const reaction = payload as EmojiReaction;
         setRecentReactions((curr) => [reaction, ...curr].slice(0, 12));
       })
+      .on("broadcast", { event: "REFRESH_ROOM" }, () => refreshRoom())
       .subscribe();
 
     channelRef.current = channel;
@@ -242,6 +243,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         setOptimisticPhase(null);
         throw new Error(payload.error ?? "Auction action failed.");
       }
+      channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
       router.refresh();
     } catch (err) {
       setActionError(toErrorMessage(err));
@@ -260,6 +262,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       );
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Auction action failed.");
+      channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
       router.refresh();
     } catch (err) {
       setActionError(toErrorMessage(err));
@@ -282,6 +285,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       );
       const payload = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(payload.error ?? "Failed to end round.");
+      channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
       router.refresh();
     } catch (err) {
       setActionError(toErrorMessage(err));
@@ -307,6 +311,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       const payload = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(payload.error ?? "Failed to start next round.");
       setSelectedPlayerIds([]);
+      channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
       router.refresh();
     } catch (err) {
       setActionError(toErrorMessage(err));
@@ -327,7 +332,10 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       });
       const payload = (await res.json()) as { error?: string };
       if (!res.ok) setBidError(payload.error ?? "Bid failed.");
-      else router.refresh();
+      else {
+        channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
+        router.refresh();
+      }
     } catch (err) {
       setBidError(toErrorMessage(err));
     } finally {
@@ -347,7 +355,10 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       });
       const payload = (await res.json()) as { error?: string };
       if (!res.ok) setBidError(payload.error ?? "Skip vote failed.");
-      else router.refresh();
+      else {
+        channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
+        router.refresh();
+      }
     } catch (err) {
       setBidError(toErrorMessage(err));
     } finally {

@@ -6,6 +6,7 @@ import { StartAuctionButton } from "@/components/room/start-auction-button";
 import { TeamOwnershipPanel } from "@/components/room/team-ownership-panel";
 import { UploadPlayersForm } from "@/components/room/upload-players-form";
 import { UploadTeamsForm } from "@/components/room/upload-teams-form";
+import { SelfCreateTeamForm } from "@/components/room/self-create-team-form";
 import { defaultPlayerPoolCount } from "@/lib/default-player-pool";
 import { hasServiceRoleEnv } from "@/lib/config";
 import { requireSessionUser } from "@/lib/server/auth";
@@ -132,22 +133,55 @@ export default async function RoomPage({
 
       <section className="split" style={{ marginTop: "1rem" }}>
         <div className="grid">
-          <div className="panel">
-            <h2>Roster upload</h2>
-            <p className="subtle">
-              Load the built-in master player pool or upload a refreshed CSV/XLSX
-              sheet for this room.
-            </p>
-            <UploadPlayersForm
-              defaultPlayerCount={defaultPlayerPoolCount}
-              roomCode={snapshot.room.code}
-            />
-          </div>
+          {snapshot.currentMember.isAdmin ? (
+            <>
+              <div className="panel">
+                <h2>Roster upload</h2>
+                <p className="subtle">
+                  Load the built-in master player pool or upload a refreshed CSV/XLSX
+                  sheet for this room.
+                </p>
+                <UploadPlayersForm
+                  defaultPlayerCount={defaultPlayerPoolCount}
+                  roomCode={snapshot.room.code}
+                />
+              </div>
 
-          <div className="panel">
-            <h2>Team upload</h2>
-            <UploadTeamsForm roomCode={snapshot.room.code} />
-          </div>
+              <div className="panel">
+                <h2>Team upload</h2>
+                <UploadTeamsForm roomCode={snapshot.room.code} />
+              </div>
+            </>
+          ) : (
+            <div className="panel">
+              <h2>My Team</h2>
+              {(() => {
+                const myTeam = snapshot.teams.find((t) => t.ownerUserId === user.id);
+                if (myTeam) {
+                  return (
+                    <div>
+                      <div className="room-card" style={{ marginTop: "0.5rem" }}>
+                        <strong>{myTeam.name}</strong>
+                        <div className="subtle mono">{myTeam.shortCode}</div>
+                        <div className="pill-row" style={{ marginTop: "0.5rem" }}>
+                          <span className="pill highlight">{formatCurrency(myTeam.purseRemaining)}</span>
+                          <span className="pill">Squad limit: {myTeam.squadLimit}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <>
+                    <p className="subtle">
+                      You don't own a team in this room yet. Configure your team below.
+                    </p>
+                    <SelfCreateTeamForm roomCode={snapshot.room.code} />
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </div>
 
         <div className="grid">

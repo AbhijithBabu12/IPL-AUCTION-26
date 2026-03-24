@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import type { Player, SquadEntry, Team, Trade } from "@/lib/domain/types";
 import { formatCurrencyShort, toErrorMessage } from "@/lib/utils";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getRoomChannelName } from "@/lib/domain/realtime";
 
 type TabId = "incoming" | "propose";
 
@@ -47,6 +49,10 @@ function TradeOfferCard({
       );
       const payload = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(payload.error ?? `Failed to ${action} trade.`);
+      try {
+        const supabase = getSupabaseBrowserClient();
+        await supabase.channel(getRoomChannelName(roomCode)).send({ type: "broadcast", event: "REFRESH_ROOM" });
+      } catch (e) { /* ignore */ }
       router.refresh();
     } catch (err) {
       setError(toErrorMessage(err));
@@ -234,6 +240,10 @@ function ProposeForm({
       setPlayersFromB([]);
       setCashFromA(0);
       setCashFromB(0);
+      try {
+        const supabase = getSupabaseBrowserClient();
+        await supabase.channel(getRoomChannelName(roomCode)).send({ type: "broadcast", event: "REFRESH_ROOM" });
+      } catch (e) { /* ignore */ }
       router.refresh();
     } catch (err) {
       setError(toErrorMessage(err));
