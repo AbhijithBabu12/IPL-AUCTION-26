@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ImportResultsForm } from "@/components/room/import-results-form";
 import { RoomInvitePanel } from "@/components/room/room-invite-panel";
 import { StartAuctionButton } from "@/components/room/start-auction-button";
+import { TeamOwnershipPanel } from "@/components/room/team-ownership-panel";
 import { UploadPlayersForm } from "@/components/room/upload-players-form";
 import { UploadTeamsForm } from "@/components/room/upload-teams-form";
 import { defaultPlayerPoolCount } from "@/lib/default-player-pool";
@@ -221,6 +222,17 @@ export default async function RoomPage({
         </section>
       )}
 
+      {snapshot.currentMember.isAdmin && snapshot.teams.length > 0 ? (
+        <section className="panel" style={{ marginTop: "1rem" }}>
+          <h2>Team ownership</h2>
+          <TeamOwnershipPanel
+            members={snapshot.members}
+            roomCode={snapshot.room.code}
+            teams={snapshot.teams}
+          />
+        </section>
+      ) : null}
+
       <section className="grid two" style={{ marginTop: "1rem" }}>
         <div className="panel">
           <h2>Teams</h2>
@@ -233,6 +245,12 @@ export default async function RoomPage({
                   <strong>{team.name}</strong>
                   <div className="subtle">
                     {team.shortCode} • {formatCurrency(team.purseRemaining)}
+                  </div>
+                  <div className="subtle">
+                    Owner:{" "}
+                    {snapshot.members.find((member) => member.userId === team.ownerUserId)?.displayName ??
+                      snapshot.members.find((member) => member.userId === team.ownerUserId)?.email ??
+                      "Unassigned"}
                   </div>
                 </div>
               ))}

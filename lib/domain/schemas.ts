@@ -43,6 +43,10 @@ export const teamRenameSchema = z.object({
   name: z.string().trim().min(1).max(60),
 });
 
+export const teamOwnerSchema = z.object({
+  ownerUserId: z.string().uuid().nullable(),
+});
+
 export const startNextRoundSchema = z.object({
   playerIds: z.array(z.string().uuid()).min(1, "Select at least one player for the next round."),
 });
@@ -73,3 +77,4 @@ export type TeamUploadInput = z.infer<typeof teamUploadSchema>;
 export type TeamUploadRowInput = z.infer<typeof teamUploadRowSchema>;
 export type BidInput = z.infer<typeof bidSchema>;
 export type TradeInput = z.infer<typeof tradeSchema>;
+export type TeamOwnerInput = z.infer<typeof teamOwnerSchema>;
