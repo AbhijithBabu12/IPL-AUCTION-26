@@ -217,7 +217,7 @@ export default async function RoomPage({
         </div>
 
         <div className="grid">
-          <div className="panel">
+          <div className="panel" style={{ position: "relative", zIndex: 20, overflow: "visible" }}>
             <h2>Auction readiness</h2>
             <div className="stats-strip">
               <details className="stat-tile" style={{ cursor: "pointer" }}>
@@ -276,9 +276,9 @@ export default async function RoomPage({
             
             <div className="grid" style={{ marginTop: "0.9rem" }}>
               <div className="pill-row">
-              <details style={{ cursor: "pointer", display: "inline-block", position: "relative" }}>
+              <details style={{ cursor: "pointer", display: "inline-block", position: "relative", zIndex: 30 }}>
                 <summary className="pill" style={summaryButtonStyle}>Available: {availablePlayers}</summary>
-                <div className="panel" style={{ position: "absolute", zIndex: 50, marginTop: "0.5rem", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
+                <div className="panel" style={{ position: "absolute", zIndex: 120, marginTop: "0.5rem", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
                   {availablePlayerList.map(p => (
                     <div key={p.id} style={{ fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       {p.name} <span className="subtle">({p.role})</span>
@@ -287,9 +287,9 @@ export default async function RoomPage({
                 </div>
               </details>
 
-              <details style={{ cursor: "pointer", display: "inline-block", position: "relative" }}>
+              <details style={{ cursor: "pointer", display: "inline-block", position: "relative", zIndex: 30 }}>
                 <summary className="pill" style={summaryButtonStyle}>Sold: {soldPlayers}</summary>
-                <div className="panel" style={{ position: "absolute", zIndex: 60, marginTop: "0.5rem", width: "300px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
+                <div className="panel" style={{ position: "absolute", zIndex: 120, marginTop: "0.5rem", width: "300px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
                   {soldPlayerList.map(p => (
                     <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       <span>{p.name} <span className="subtle" style={{fontSize: "0.75rem"}}>{
@@ -301,9 +301,9 @@ export default async function RoomPage({
                 </div>
               </details>
 
-              <details style={{ cursor: "pointer", display: "inline-block", position: "relative" }}>
+              <details style={{ cursor: "pointer", display: "inline-block", position: "relative", zIndex: 30 }}>
                 <summary className="pill" style={summaryButtonStyle}>Unsold: {unsoldPlayers}</summary>
-                <div className="panel" style={{ position: "absolute", zIndex: 50, marginTop: "0.5rem", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
+                <div className="panel" style={{ position: "absolute", zIndex: 120, marginTop: "0.5rem", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
                   {unsoldPlayerList.map(p => (
                     <div key={p.id} style={{ fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       {p.name} <span className="subtle">({p.role})</span>
@@ -340,7 +340,7 @@ export default async function RoomPage({
             )}
           </div>
 
-          <div className="panel">
+          <div className="panel" style={{ position: "relative", zIndex: 1 }}>
             <h2>Members</h2>
             <div className="member-grid">
               {snapshot.members.map((member) => (

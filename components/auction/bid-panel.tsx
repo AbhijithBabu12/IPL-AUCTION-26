@@ -40,6 +40,7 @@ function IncrementButtons({
   roomCode,
   anyPending,
   isLive,
+  isBiddingOpen,
   onPendingChange,
   onError,
   onBidAction,
@@ -50,6 +51,7 @@ function IncrementButtons({
   roomCode: string;
   anyPending: boolean;
   isLive: boolean;
+  isBiddingOpen: boolean;
   onPendingChange: (teamId: string | null) => void;
   onError: (msg: string | null) => void;
   onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
@@ -63,7 +65,7 @@ function IncrementButtons({
   if (isFirstBid) {
     const openPrice = currentPlayer?.basePrice ?? null;
     const canAfford = openPrice !== null && team.purseRemaining >= openPrice;
-    const disabled = !isLive || !currentPlayer || !canAfford || anyPending;
+    const disabled = !isBiddingOpen || !currentPlayer || !canAfford || anyPending;
 
     return (
       <button
@@ -92,7 +94,7 @@ function IncrementButtons({
       {allowedIncrements.map((inc) => {
         const nextAmount = currentBid + inc;
         const canAfford = team.purseRemaining >= nextAmount;
-        const disabled = !isLive || !currentPlayer || isLeading || !canAfford || anyPending;
+        const disabled = !isBiddingOpen || !currentPlayer || isLeading || !canAfford || anyPending;
 
         return (
           <button
@@ -128,6 +130,7 @@ function AdminBidPanel({
   teams,
   onBidAction,
   onSkipVoteAction,
+  isBiddingOpen,
 }: {
   roomCode: string;
   auctionState: AuctionState;
@@ -135,6 +138,7 @@ function AdminBidPanel({
   teams: Team[];
   onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
   onSkipVoteAction?: (teamId: string) => Promise<string | null>;
+  isBiddingOpen?: boolean;
 }) {
   const router = useRouter();
   const [pendingTeamId, setPendingTeamId] = useState<string | null>(null);
@@ -201,7 +205,7 @@ function AdminBidPanel({
                   ) : (
                     <button
                       className="button ghost skip-btn"
-                      disabled={!isLive || skipPendingId === team.id || Boolean(pendingTeamId)}
+                      disabled={!isBiddingOpen || skipPendingId === team.id || Boolean(pendingTeamId)}
                       onClick={async () => {
                         setSkipPendingId(team.id);
                         const err = onSkipVoteAction
@@ -226,6 +230,7 @@ function AdminBidPanel({
                 auctionState={auctionState}
                 currentPlayer={currentPlayer}
                 isLive={isLive}
+                isBiddingOpen={Boolean(isBiddingOpen)}
                 onError={setError}
                 onPendingChange={setPendingTeamId}
                 onBidAction={onBidAction}
@@ -248,6 +253,7 @@ export function BidPanel({
   currentMember,
   onBidAction,
   onSkipVoteAction,
+  isBiddingOpen,
 }: {
   roomCode: string;
   auctionState: AuctionState;
@@ -256,6 +262,7 @@ export function BidPanel({
   currentMember: RoomMember | null;
   onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
   onSkipVoteAction?: (teamId: string) => Promise<string | null>;
+  isBiddingOpen?: boolean;
 }) {
   const router = useRouter();
   const [teamId, setTeamId] = useState("");
@@ -274,6 +281,7 @@ export function BidPanel({
       <AdminBidPanel
         auctionState={auctionState}
         currentPlayer={currentPlayer}
+        isBiddingOpen={isBiddingOpen}
         onBidAction={onBidAction}
         onSkipVoteAction={onSkipVoteAction}
         roomCode={roomCode}
@@ -360,7 +368,7 @@ export function BidPanel({
       {isFirstBid ? (
         <button
           className="button"
-          disabled={!canBid || pending || !selectedTeam || (selectedTeam.purseRemaining < (currentPlayer?.basePrice ?? 0))}
+          disabled={!canBid || !isBiddingOpen || pending || !selectedTeam || (selectedTeam.purseRemaining < (currentPlayer?.basePrice ?? 0))}
           onClick={() => void handleIncrementBid(undefined)}
           style={{ width: "100%" }}
           type="button"
@@ -376,7 +384,7 @@ export function BidPanel({
             return (
               <button
                 className="button"
-                disabled={!canBid || pending || !canAfford}
+                disabled={!canBid || !isBiddingOpen || pending || !canAfford}
                 key={inc}
                 onClick={() => void handleIncrementBid(inc)}
                 style={{ flex: "1", minWidth: "3.5rem", fontSize: "0.85rem" }}
@@ -393,7 +401,7 @@ export function BidPanel({
       {isLive && currentPlayer && currentMember?.isPlayer && (
         <button
           className={`button ghost skip-btn`}
-          disabled={hasSkipVoted || skipPending || pending}
+          disabled={!isBiddingOpen || hasSkipVoted || skipPending || pending}
           onClick={() => void handleSkipVote()}
           style={{ width: "100%", marginTop: "0.75rem" }}
           type="button"

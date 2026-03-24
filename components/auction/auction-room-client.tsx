@@ -101,6 +101,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   const isAdmin = Boolean(snapshot.currentMember?.isAdmin);
   const isLive = effectivePhase === "LIVE";
   const isPaused = effectivePhase === "PAUSED";
+  const isBiddingOpen = isLive && remainingSeconds > 0;
   const currentBid = localAuctionState.currentBid;
   const allowedIncrements = getAllowedIncrements(currentBid);
   const isFirstBid = currentBid === null;
@@ -578,6 +579,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   async function handleBid(increment?: number, teamIdOverride?: string): Promise<string | null> {
     const teamId = teamIdOverride ?? bidTeamId;
     if (!teamId) return "No team selected.";
+    if (!isBiddingOpen) return "Bidding time has ended for this player.";
     setBidPending(true);
     setBidError(null);
     try {
@@ -644,6 +646,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   async function handleSkipVote(teamIdOverride?: string): Promise<string | null> {
     const teamId = teamIdOverride ?? bidTeamId;
     if (!teamId) return "No team selected.";
+    if (!isBiddingOpen) return "Bidding time has ended for this player.";
     setSkipPending(true);
     setBidError(null);
     try {
@@ -1145,6 +1148,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 auctionState={localAuctionState}
                 currentMember={snapshot.currentMember}
                 currentPlayer={currentPlayer}
+                isBiddingOpen={isBiddingOpen}
                 onBidAction={async (teamId, increment) => {
                   setBidTeamId(teamId);
                   return handleBid(increment, teamId);
@@ -1267,7 +1271,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     key={inc}
                     className={`bid-button-lg${isLeading ? " leading" : ""}`}
                     disabled={
-                      !isLive || !currentPlayer || isLeading || !canAfford || bidPending
+                      !isBiddingOpen || !currentPlayer || isLeading || !canAfford || bidPending
                     }
                     onClick={() => void handleBid(inc)}
                     title={`Bid ${formatCurrencyShort(nextAmount)}`}
@@ -1288,7 +1292,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   padding: "0.75rem 1.1rem",
                   flexShrink: 0,
                 }}
-                disabled={hasSkipVoted || skipPending || bidPending}
+                disabled={!isBiddingOpen || hasSkipVoted || skipPending || bidPending}
                 onClick={() => void handleSkipVote()}
                 type="button"
               >

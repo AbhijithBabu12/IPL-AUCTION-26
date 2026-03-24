@@ -27,7 +27,7 @@ interface BidValidationInput {
   room: Room;
   auctionState: AuctionState;
   team: Team;
-  squads: SquadEntry[];
+  teamSquadCount: number;
   now: Date;
   increment?: number;
 }
@@ -165,7 +165,7 @@ export function validateBidPlacement({
   room,
   auctionState,
   team,
-  squads,
+  teamSquadCount,
   now,
   increment,
 }: BidValidationInput) {
@@ -177,12 +177,15 @@ export function validateBidPlacement({
     throw new AppError("No player is currently on the block.", 400, "NO_ACTIVE_PLAYER");
   }
 
+  if (!auctionState.expiresAt || new Date(auctionState.expiresAt).getTime() <= now.getTime()) {
+    throw new AppError("Bidding time has ended for this player.", 400, "TIMER_EXPIRED");
+  }
+
   if (auctionState.currentTeamId === team.id) {
     throw new AppError("Highest bidder cannot bid again immediately.", 400, "DUPLICATE_BID");
   }
 
-  const squadCount = squads.filter((entry) => entry.teamId === team.id).length;
-  if (squadCount >= team.squadLimit) {
+  if (teamSquadCount >= team.squadLimit) {
     throw new AppError("Team squad is already full.", 400, "SQUAD_FULL");
   }
 
