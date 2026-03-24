@@ -42,6 +42,7 @@ function IncrementButtons({
   isLive,
   onPendingChange,
   onError,
+  onBidAction,
 }: {
   auctionState: AuctionState;
   currentPlayer: Player | null;
@@ -51,6 +52,7 @@ function IncrementButtons({
   isLive: boolean;
   onPendingChange: (teamId: string | null) => void;
   onError: (msg: string | null) => void;
+  onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
 }) {
   const router = useRouter();
   const isLeading = team.id === auctionState.currentTeamId;
@@ -70,9 +72,11 @@ function IncrementButtons({
         onClick={async () => {
           onPendingChange(team.id);
           onError(null);
-          const err = await placeBid(roomCode, team.id);
+          const err = onBidAction
+            ? await onBidAction(team.id)
+            : await placeBid(roomCode, team.id);
           if (err) onError(err);
-          else router.refresh();
+          else if (!onBidAction) router.refresh();
           onPendingChange(null);
         }}
         style={{ width: "100%", marginTop: "0.5rem" }}
@@ -98,9 +102,11 @@ function IncrementButtons({
             onClick={async () => {
               onPendingChange(team.id);
               onError(null);
-              const err = await placeBid(roomCode, team.id, inc);
+              const err = onBidAction
+                ? await onBidAction(team.id, inc)
+                : await placeBid(roomCode, team.id, inc);
               if (err) onError(err);
-              else router.refresh();
+              else if (!onBidAction) router.refresh();
               onPendingChange(null);
             }}
             style={{ flex: "1", minWidth: "3.5rem", fontSize: "0.8rem" }}
@@ -120,11 +126,15 @@ function AdminBidPanel({
   auctionState,
   currentPlayer,
   teams,
+  onBidAction,
+  onSkipVoteAction,
 }: {
   roomCode: string;
   auctionState: AuctionState;
   currentPlayer: Player | null;
   teams: Team[];
+  onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
+  onSkipVoteAction?: (teamId: string) => Promise<string | null>;
 }) {
   const router = useRouter();
   const [pendingTeamId, setPendingTeamId] = useState<string | null>(null);
@@ -194,9 +204,11 @@ function AdminBidPanel({
                       disabled={!isLive || skipPendingId === team.id || Boolean(pendingTeamId)}
                       onClick={async () => {
                         setSkipPendingId(team.id);
-                        const err = await castSkipVote(roomCode, team.id);
+                        const err = onSkipVoteAction
+                          ? await onSkipVoteAction(team.id)
+                          : await castSkipVote(roomCode, team.id);
                         if (err) setError(err);
-                        else router.refresh();
+                        else if (!onSkipVoteAction) router.refresh();
                         setSkipPendingId(null);
                       }}
                       type="button"
@@ -216,6 +228,7 @@ function AdminBidPanel({
                 isLive={isLive}
                 onError={setError}
                 onPendingChange={setPendingTeamId}
+                onBidAction={onBidAction}
                 roomCode={roomCode}
                 team={team}
               />
@@ -233,12 +246,16 @@ export function BidPanel({
   currentPlayer,
   teams,
   currentMember,
+  onBidAction,
+  onSkipVoteAction,
 }: {
   roomCode: string;
   auctionState: AuctionState;
   currentPlayer: Player | null;
   teams: Team[];
   currentMember: RoomMember | null;
+  onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
+  onSkipVoteAction?: (teamId: string) => Promise<string | null>;
 }) {
   const router = useRouter();
   const [teamId, setTeamId] = useState("");
@@ -257,6 +274,8 @@ export function BidPanel({
       <AdminBidPanel
         auctionState={auctionState}
         currentPlayer={currentPlayer}
+        onBidAction={onBidAction}
+        onSkipVoteAction={onSkipVoteAction}
         roomCode={roomCode}
         teams={teams}
       />
@@ -279,9 +298,11 @@ export function BidPanel({
     }
     setPending(true);
     setError(null);
-    const err = await placeBid(roomCode, teamId, increment);
+    const err = onBidAction
+      ? await onBidAction(teamId, increment)
+      : await placeBid(roomCode, teamId, increment);
     if (err) setError(err);
-    else router.refresh();
+    else if (!onBidAction) router.refresh();
     setPending(false);
   }
 
@@ -290,9 +311,11 @@ export function BidPanel({
     setSkipPending(true);
     setError(null);
     try {
-      const err = await castSkipVote(roomCode, teamId);
+      const err = onSkipVoteAction
+        ? await onSkipVoteAction(teamId)
+        : await castSkipVote(roomCode, teamId);
       if (err) setError(err);
-      else router.refresh();
+      else if (!onSkipVoteAction) router.refresh();
     } catch (err) {
       setError(toErrorMessage(err));
     }
