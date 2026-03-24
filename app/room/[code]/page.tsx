@@ -8,6 +8,8 @@ import { UploadPlayersForm } from "@/components/room/upload-players-form";
 import { UploadTeamsForm } from "@/components/room/upload-teams-form";
 import { SelfCreateTeamForm } from "@/components/room/self-create-team-form";
 import { TradePanel } from "@/components/trades/trade-panel";
+import { DashboardAutoRefresher } from "@/components/dashboard-auto-refresher";
+import { SquadBoard } from "@/components/auction/squad-board";
 import { defaultPlayerPoolCount } from "@/lib/default-player-pool";
 import { hasServiceRoleEnv } from "@/lib/config";
 import { requireSessionUser } from "@/lib/server/auth";
@@ -67,6 +69,7 @@ export default async function RoomPage({
 
   return (
     <main className="shell">
+      <DashboardAutoRefresher roomId={snapshot.room.id} />
       <div className="nav">
         <div>
           <div className="brand">{snapshot.room.name}</div>
@@ -269,28 +272,16 @@ export default async function RoomPage({
       ) : null}
 
       <section className="grid two" style={{ marginTop: "1rem" }}>
-        <div className="panel">
-          <h2>Teams</h2>
-          {snapshot.teams.length === 0 ? (
-            <div className="empty-state">Upload teams to prepare the auction table.</div>
-          ) : (
-            <div className="team-grid">
-              {snapshot.teams.map((team) => (
-                <div className="room-card" key={team.id}>
-                  <strong>{team.name}</strong>
-                  <div className="subtle">
-                    {team.shortCode} • {formatCurrency(team.purseRemaining)}
-                  </div>
-                  <div className="subtle">
-                    Owner:{" "}
-                    {snapshot.members.find((member) => member.userId === team.ownerUserId)?.displayName ??
-                      snapshot.members.find((member) => member.userId === team.ownerUserId)?.email ??
-                      "Unassigned"}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="panel" style={{ padding: 0, background: "transparent", border: "none" }}>
+          <SquadBoard
+            teams={snapshot.teams}
+            squads={snapshot.squads}
+            players={snapshot.players}
+            roomCode={snapshot.room.code}
+            phase={snapshot.auctionState?.phase ?? "WAITING"}
+            currentUserId={snapshot.user?.id ?? null}
+            isAdmin={snapshot.currentMember.isAdmin}
+          />
         </div>
 
         <details className="panel" style={{ cursor: "pointer", transition: "all 0.2s ease" }}>

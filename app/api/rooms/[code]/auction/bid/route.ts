@@ -22,16 +22,30 @@ export async function POST(
     const { room, member } = await requireRoomMember(code, authUser.id);
     const input = await readJson(request, bidSchema);
     const admin = getSupabaseAdminClient();
-    const { players, teams, auctionState, squads } = await getRoomEntities(room.id);
+    
+    // Instead of fetching all 600+ players using getRoomEntities, surgically query only what is needed
+    const [{ data: auctionRow }, { data: teamRow }, { data: squadRows }] = await Promise.all([
+      admin.from("auction_state").select("*").eq("room_id", room.id).maybeSingle(),
+      admin.from("teams").select("*").eq("id", input.teamId).maybeSingle(),
+      admin.from("squad").select("*").eq("room_id", room.id),
+    ]);
 
-    if (!auctionState) {
+    if (!auctionRow) {
       throw new AppError("Auction has not started yet.", 400, "NO_AUCTION_STATE");
     }
 
-    const currentPlayer = players.find(
-      (player) => player.id === auctionState.currentPlayerId,
-    );
-    const team = teams.find((item) => item.id === input.teamId);
+    const { mapAuctionState, mapTeam, mapPlayer, mapSquadEntry } = await import("@/lib/server/room");
+    const auctionState = mapAuctionState(auctionRow as Record<string, unknown>);
+    
+    const { data: playerRow } = await admin
+      .from("players")
+      .select("*")
+      .eq("id", auctionState.currentPlayerId ?? "")
+      .maybeSingle();
+
+    const currentPlayer = playerRow ? mapPlayer(playerRow as Record<string, unknown>) : null;
+    const team = teamRow ? mapTeam(teamRow as Record<string, unknown>) : null;
+    const squads = (squadRows ?? []).map((row) => mapSquadEntry(row as Record<string, unknown>));
 
     if (!currentPlayer) {
       throw new AppError("No active player is available for bidding.", 400, "NO_PLAYER");

@@ -244,6 +244,16 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     snapshot.currentMember?.isAdmin,
   ]);
 
+  // Auto-select players for Round 1 to simplify admin start
+  useEffect(() => {
+    if (effectivePhase === "ROUND_END" && snapshot.auctionState.currentRound === 0 && selectedPlayerIds.length === 0) {
+      const unsold = snapshot.players.filter(p => p.status === "UNSOLD").map(p => p.id);
+      if (unsold.length > 0) {
+        setSelectedPlayerIds(unsold);
+      }
+    }
+  }, [effectivePhase, snapshot.auctionState.currentRound, snapshot.players.length, selectedPlayerIds.length]);
+
   async function runControlAction(
     url: string,
     optimistic: string | null,
@@ -797,7 +807,9 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   >
                     {nextRoundPending
                       ? "Starting…"
-                      : `Start Round ${snapshot.auctionState.currentRound + 1} (${selectedPlayerIds.length} players)`}
+                      : snapshot.auctionState.currentRound === 0 
+                        ? `Start Auction (${selectedPlayerIds.length} players)` 
+                        : `Start Round ${snapshot.auctionState.currentRound + 1} (${selectedPlayerIds.length} players)`}
                   </button>
                   <button
                     className="button ghost"
