@@ -14,7 +14,7 @@ import { defaultPlayerPoolCount } from "@/lib/default-player-pool";
 import { hasServiceRoleEnv } from "@/lib/config";
 import { requireSessionUser } from "@/lib/server/auth";
 import { getRoomSnapshot } from "@/lib/server/queries";
-import { deriveRoleLabel, formatCurrency } from "@/lib/utils";
+import { deriveRoleLabel, formatCurrency, formatCurrencyShort } from "@/lib/utils";
 
 export default async function RoomPage({
   params,
@@ -66,6 +66,19 @@ export default async function RoomPage({
   const unsoldPlayers = snapshot.players.filter(
     (player) => player.status === "UNSOLD",
   ).length;
+  const availablePlayerList = snapshot.players.filter(
+    (player) => player.status === "AVAILABLE",
+  );
+  const soldPlayerList = snapshot.players.filter((player) => player.status === "SOLD");
+  const unsoldPlayerList = snapshot.players.filter(
+    (player) => player.status === "UNSOLD",
+  );
+  const summaryButtonStyle = {
+    outline: "none",
+    listStyle: "none",
+    display: "block",
+    cursor: "pointer",
+  } as const;
 
   return (
     <main className="shell">
@@ -164,7 +177,7 @@ export default async function RoomPage({
                 if (myTeam) {
                   return (
                     <details className="room-card" style={{ marginTop: "0.5rem", cursor: "pointer" }}>
-                      <summary style={{ outline: "none", listStyle: "none" }}>
+                      <summary style={summaryButtonStyle}>
                         <strong>{myTeam.name}</strong>
                         <div className="subtle mono">{myTeam.shortCode}</div>
                         <div className="pill-row" style={{ marginTop: "0.5rem" }}>
@@ -208,9 +221,12 @@ export default async function RoomPage({
             <h2>Auction readiness</h2>
             <div className="stats-strip">
               <details className="stat-tile" style={{ cursor: "pointer" }}>
-                <summary style={{ outline: "none", listStyle: "none" }}>
+                <summary style={summaryButtonStyle}>
                   <strong>{snapshot.players.length}</strong>
                   Total players
+                  <div className="subtle" style={{ marginTop: "0.35rem", fontSize: "0.78rem" }}>
+                    Click to view player list
+                  </div>
                 </summary>
                 <div style={{ marginTop: "1rem", maxHeight: "250px", overflowY: "auto", fontSize: "0.85rem", display: "grid", gap: "0.4rem" }}>
                   {snapshot.players.map(p => (
@@ -222,9 +238,12 @@ export default async function RoomPage({
               </details>
               
               <details className="stat-tile" style={{ cursor: "pointer" }}>
-                <summary style={{ outline: "none", listStyle: "none" }}>
+                <summary style={summaryButtonStyle}>
                   <strong>{snapshot.teams.length}</strong>
                   Teams
+                  <div className="subtle" style={{ marginTop: "0.35rem", fontSize: "0.78rem" }}>
+                    Click to view teams
+                  </div>
                 </summary>
                 <div style={{ marginTop: "1rem", maxHeight: "250px", overflowY: "auto", fontSize: "0.85rem", display: "grid", gap: "0.4rem" }}>
                   {snapshot.teams.map(t => (
@@ -237,9 +256,12 @@ export default async function RoomPage({
               </details>
 
               <details className="stat-tile" style={{ cursor: "pointer" }}>
-                <summary style={{ outline: "none", listStyle: "none" }}>
+                <summary style={summaryButtonStyle}>
                   <strong>{snapshot.members.length}</strong>
                   Members
+                  <div className="subtle" style={{ marginTop: "0.35rem", fontSize: "0.78rem" }}>
+                    Click to view room members
+                  </div>
                 </summary>
                 <div style={{ marginTop: "1rem", maxHeight: "250px", overflowY: "auto", fontSize: "0.85rem", display: "grid", gap: "0.4rem" }}>
                   {snapshot.members.map(m => (
@@ -252,11 +274,12 @@ export default async function RoomPage({
               </details>
             </div>
             
-            <div className="pill-row" style={{ marginTop: "0.9rem", position: "relative" }}>
-              <details style={{ cursor: "pointer", display: "inline-block" }}>
-                <summary className="pill" style={{ outline: "none", listStyle: "none", listStyleType: "none" }}>Available: {availablePlayers}</summary>
+            <div className="grid" style={{ marginTop: "0.9rem" }}>
+              <div className="pill-row">
+              <details style={{ cursor: "pointer", display: "inline-block", position: "relative" }}>
+                <summary className="pill" style={summaryButtonStyle}>Available: {availablePlayers}</summary>
                 <div className="panel" style={{ position: "absolute", zIndex: 50, marginTop: "0.5rem", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
-                  {snapshot.players.filter(p => p.status === "AVAILABLE").map(p => (
+                  {availablePlayerList.map(p => (
                     <div key={p.id} style={{ fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       {p.name} <span className="subtle">({p.role})</span>
                     </div>
@@ -264,10 +287,10 @@ export default async function RoomPage({
                 </div>
               </details>
 
-              <details style={{ cursor: "pointer", display: "inline-block" }}>
-                <summary className="pill" style={{ outline: "none", listStyle: "none", listStyleType: "none" }}>Sold: {soldPlayers}</summary>
-                <div className="panel" style={{ position: "absolute", zIndex: 60, marginTop: "0.5rem", left: "0", width: "300px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
-                  {snapshot.players.filter(p => p.status === "SOLD").map(p => (
+              <details style={{ cursor: "pointer", display: "inline-block", position: "relative" }}>
+                <summary className="pill" style={summaryButtonStyle}>Sold: {soldPlayers}</summary>
+                <div className="panel" style={{ position: "absolute", zIndex: 60, marginTop: "0.5rem", width: "300px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
+                  {soldPlayerList.map(p => (
                     <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       <span>{p.name} <span className="subtle" style={{fontSize: "0.75rem"}}>{
                         snapshot.teams.find(t => t.id === p.currentTeamId)?.shortCode
@@ -278,16 +301,20 @@ export default async function RoomPage({
                 </div>
               </details>
 
-              <details style={{ cursor: "pointer", display: "inline-block" }}>
-                <summary className="pill" style={{ outline: "none", listStyle: "none", listStyleType: "none" }}>Unsold: {unsoldPlayers}</summary>
-                <div className="panel" style={{ position: "absolute", zIndex: 50, marginTop: "0.5rem", left: "0", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
-                  {snapshot.players.filter(p => p.status === "UNSOLD").map(p => (
+              <details style={{ cursor: "pointer", display: "inline-block", position: "relative" }}>
+                <summary className="pill" style={summaryButtonStyle}>Unsold: {unsoldPlayers}</summary>
+                <div className="panel" style={{ position: "absolute", zIndex: 50, marginTop: "0.5rem", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
+                  {unsoldPlayerList.map(p => (
                     <div key={p.id} style={{ fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       {p.name} <span className="subtle">({p.role})</span>
                     </div>
                   ))}
                 </div>
               </details>
+              </div>
+              <div className="subtle" style={{ fontSize: "0.8rem" }}>
+                Click any count above to open the matching list.
+              </div>
             </div>
             {snapshot.currentMember.isAdmin &&
             (snapshot.auctionState?.phase ?? "WAITING") === "WAITING" ? (
@@ -364,7 +391,7 @@ export default async function RoomPage({
         </div>
 
         <details className="panel" style={{ cursor: "pointer", transition: "all 0.2s ease" }}>
-          <summary style={{ outline: "none", listStyle: "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <summary style={{ ...summaryButtonStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 style={{ margin: 0 }}>Player Pool ({snapshot.players.length})</h2>
             <span style={{ fontSize: "1.2rem", opacity: 0.7 }}>▾</span>
           </summary>
