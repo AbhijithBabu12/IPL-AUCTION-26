@@ -163,16 +163,31 @@ export default async function RoomPage({
                 const myTeam = snapshot.teams.find((t) => t.ownerUserId === user.id);
                 if (myTeam) {
                   return (
-                    <div>
-                      <div className="room-card" style={{ marginTop: "0.5rem" }}>
+                    <details className="room-card" style={{ marginTop: "0.5rem", cursor: "pointer" }}>
+                      <summary style={{ outline: "none", listStyle: "none" }}>
                         <strong>{myTeam.name}</strong>
                         <div className="subtle mono">{myTeam.shortCode}</div>
                         <div className="pill-row" style={{ marginTop: "0.5rem" }}>
                           <span className="pill highlight">{formatCurrency(myTeam.purseRemaining)}</span>
                           <span className="pill">Squad limit: {myTeam.squadLimit}</span>
                         </div>
+                      </summary>
+                      <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)", display: "grid", gap: "0.5rem" }}>
+                        {snapshot.squads.filter(s => s.teamId === myTeam.id).length === 0 ? (
+                          <div className="subtle" style={{ fontSize: "0.9rem" }}>No players bought yet.</div>
+                        ) : (
+                          snapshot.squads.filter(s => s.teamId === myTeam.id).map(s => {
+                            const p = snapshot.players.find(x => x.id === s.playerId);
+                            return (
+                              <div key={s.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
+                                <span>{p?.name} <span className="subtle" style={{fontSize:"0.8rem"}}>{p?.role}</span></span>
+                                <strong>{formatCurrencyShort(s.purchasePrice)}</strong>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
-                    </div>
+                    </details>
                   );
                 }
                 return (
@@ -192,23 +207,87 @@ export default async function RoomPage({
           <div className="panel">
             <h2>Auction readiness</h2>
             <div className="stats-strip">
-              <div className="stat-tile">
-                <strong>{snapshot.players.length}</strong>
-                Total players
-              </div>
-              <div className="stat-tile">
-                <strong>{snapshot.teams.length}</strong>
-                Teams
-              </div>
-              <div className="stat-tile">
-                <strong>{snapshot.members.length}</strong>
-                Members
-              </div>
+              <details className="stat-tile" style={{ cursor: "pointer" }}>
+                <summary style={{ outline: "none", listStyle: "none" }}>
+                  <strong>{snapshot.players.length}</strong>
+                  Total players
+                </summary>
+                <div style={{ marginTop: "1rem", maxHeight: "250px", overflowY: "auto", fontSize: "0.85rem", display: "grid", gap: "0.4rem" }}>
+                  {snapshot.players.map(p => (
+                    <div key={p.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "0.2rem" }}>
+                      {p.name} <span className="subtle">({p.role})</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+              
+              <details className="stat-tile" style={{ cursor: "pointer" }}>
+                <summary style={{ outline: "none", listStyle: "none" }}>
+                  <strong>{snapshot.teams.length}</strong>
+                  Teams
+                </summary>
+                <div style={{ marginTop: "1rem", maxHeight: "250px", overflowY: "auto", fontSize: "0.85rem", display: "grid", gap: "0.4rem" }}>
+                  {snapshot.teams.map(t => (
+                    <div key={t.id} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "0.2rem" }}>
+                      <span>{t.name}</span>
+                      <strong className="subtle">{formatCurrencyShort(t.purseRemaining)} left</strong>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              <details className="stat-tile" style={{ cursor: "pointer" }}>
+                <summary style={{ outline: "none", listStyle: "none" }}>
+                  <strong>{snapshot.members.length}</strong>
+                  Members
+                </summary>
+                <div style={{ marginTop: "1rem", maxHeight: "250px", overflowY: "auto", fontSize: "0.85rem", display: "grid", gap: "0.4rem" }}>
+                  {snapshot.members.map(m => (
+                    <div key={m.userId} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "0.2rem" }}>
+                      <span>{m.displayName ?? m.email ?? "Unnamed"}</span>
+                      <span className="subtle">{deriveRoleLabel(m)}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
-            <div className="pill-row" style={{ marginTop: "0.9rem" }}>
-              <span className="pill">Available: {availablePlayers}</span>
-              <span className="pill">Sold: {soldPlayers}</span>
-              <span className="pill">Unsold: {unsoldPlayers}</span>
+            
+            <div className="pill-row" style={{ marginTop: "0.9rem", position: "relative" }}>
+              <details style={{ cursor: "pointer", display: "inline-block" }}>
+                <summary className="pill" style={{ outline: "none", listStyle: "none", listStyleType: "none" }}>Available: {availablePlayers}</summary>
+                <div className="panel" style={{ position: "absolute", zIndex: 50, marginTop: "0.5rem", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
+                  {snapshot.players.filter(p => p.status === "AVAILABLE").map(p => (
+                    <div key={p.id} style={{ fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      {p.name} <span className="subtle">({p.role})</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              <details style={{ cursor: "pointer", display: "inline-block" }}>
+                <summary className="pill" style={{ outline: "none", listStyle: "none", listStyleType: "none" }}>Sold: {soldPlayers}</summary>
+                <div className="panel" style={{ position: "absolute", zIndex: 60, marginTop: "0.5rem", left: "0", width: "300px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
+                  {snapshot.players.filter(p => p.status === "SOLD").map(p => (
+                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      <span>{p.name} <span className="subtle" style={{fontSize: "0.75rem"}}>{
+                        snapshot.teams.find(t => t.id === p.currentTeamId)?.shortCode
+                      }</span></span>
+                      <strong>{p.soldPrice ? formatCurrencyShort(p.soldPrice) : "-"}</strong>
+                    </div>
+                  ))}
+                </div>
+              </details>
+
+              <details style={{ cursor: "pointer", display: "inline-block" }}>
+                <summary className="pill" style={{ outline: "none", listStyle: "none", listStyleType: "none" }}>Unsold: {unsoldPlayers}</summary>
+                <div className="panel" style={{ position: "absolute", zIndex: 50, marginTop: "0.5rem", left: "0", width: "280px", maxHeight: "300px", overflowY: "auto", padding: "1rem" }}>
+                  {snapshot.players.filter(p => p.status === "UNSOLD").map(p => (
+                    <div key={p.id} style={{ fontSize: "0.85rem", padding: "0.3rem 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                      {p.name} <span className="subtle">({p.role})</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
             {snapshot.currentMember.isAdmin &&
             (snapshot.auctionState?.phase ?? "WAITING") === "WAITING" ? (
