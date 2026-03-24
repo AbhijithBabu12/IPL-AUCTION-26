@@ -131,8 +131,14 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
 
   const routerRef = useRef(router);
   routerRef.current = router;
+  const refreshTimeoutRef = useRef<number | null>(null);
+
   const refreshRoom = useCallback(() => {
-    routerRef.current.refresh();
+    if (refreshTimeoutRef.current !== null) return;
+    refreshTimeoutRef.current = window.setTimeout(() => {
+      routerRef.current.refresh();
+      refreshTimeoutRef.current = null;
+    }, 400);
   }, []);
 
   // Timer — stops immediately when optimistic phase is PAUSED
@@ -257,6 +263,8 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       router.refresh();
     } catch (err) {
       setActionError(toErrorMessage(err));
+      // Reset the auto-advance key so it can be retried if this was a clock skew issue
+      autoAdvanceKey.current = null;
     } finally {
       setAdvancePending(false);
     }

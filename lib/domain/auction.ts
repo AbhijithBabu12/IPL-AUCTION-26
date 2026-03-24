@@ -211,7 +211,7 @@ export function resolveExpiredAuction({
     throw new AppError("No player is currently active.", 400, "NO_ACTIVE_PLAYER");
   }
 
-  if (!auctionState.expiresAt || new Date(auctionState.expiresAt) > now) {
+  if (!auctionState.expiresAt || new Date(auctionState.expiresAt).getTime() - 2000 > now.getTime()) {
     throw new AppError("Timer has not expired yet.", 400, "TIMER_RUNNING");
   }
 
