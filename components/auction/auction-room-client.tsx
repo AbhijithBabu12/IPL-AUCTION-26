@@ -223,26 +223,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     };
   }, [refreshRoom, snapshot.room.code, snapshot.room.id]);
 
-  // Auto-advance (admin only, fires when timer reaches 0)
-  useEffect(() => {
-    const shouldAutoAdvance =
-      remainingSeconds === 0 &&
-      snapshot.auctionState.phase === "LIVE" &&
-      Boolean(snapshot.currentMember?.isAdmin);
-
-    if (!shouldAutoAdvance) return;
-
-    const key = `${snapshot.auctionState.version}:${snapshot.auctionState.currentPlayerId}`;
-    if (autoAdvanceKey.current === key) return;
-    autoAdvanceKey.current = key;
-    void runAdvance();
-  }, [
-    remainingSeconds,
-    snapshot.auctionState.currentPlayerId,
-    snapshot.auctionState.phase,
-    snapshot.auctionState.version,
-    snapshot.currentMember?.isAdmin,
-  ]);
+  // timer advance was removed to prevent clock drift auto-locking. Admin manually clicks Sell/Next.
 
   // Auto-select players for Round 1 to simplify admin start
   useEffect(() => {
