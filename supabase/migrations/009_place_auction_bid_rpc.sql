@@ -105,11 +105,7 @@ begin
     v_next_amount := v_player.base_price;
   else
     if p_increment is not null then
-      if v_auction.current_bid >= 50000000 then
-        if p_increment not in (5000000, 10000000) then
-          raise exception 'Invalid bid increment.';
-        end if;
-      elsif v_auction.current_bid >= 10000000 then
+      if v_auction.current_bid >= 10000000 then
         if p_increment not in (2500000, 5000000, 10000000) then
           raise exception 'Invalid bid increment.';
         end if;
@@ -124,7 +120,6 @@ begin
       coalesce(
         p_increment,
         case
-          when v_auction.current_bid >= 50000000 then 5000000
           when v_auction.current_bid >= 10000000 then 2500000
           else 1000000
         end

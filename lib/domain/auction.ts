@@ -12,7 +12,6 @@ export const BID_INCREMENTS = [1_000_000, 2_500_000, 5_000_000, 10_000_000] as c
 
 export function getAllowedIncrements(currentBid: number | null): number[] {
   if (currentBid === null) return [];
-  if (currentBid >= 50_000_000) return [5_000_000, 10_000_000];
   if (currentBid >= 10_000_000) return [2_500_000, 5_000_000, 10_000_000];
   return [1_000_000, 2_500_000, 5_000_000, 10_000_000];
 }
