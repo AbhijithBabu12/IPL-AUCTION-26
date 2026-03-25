@@ -41,11 +41,8 @@ interface ResolveAuctionInput {
 
 export function getRoundQueue(players: Player[], round: number) {
   const sorted = [...players].sort((left, right) => left.orderIndex - right.orderIndex);
-  // Round 1 goes through all players in order; subsequent rounds only include AVAILABLE players
-  // (start-next-round resets selected UNSOLD players to AVAILABLE before starting)
-  if (round === 1) {
-    return sorted;
-  }
+  // Auction order should only include players still available to be auctioned.
+  // Fresh uploads start as AVAILABLE, and imported continuation auctions can preload SOLD players.
   return sorted.filter((player) => player.status === "AVAILABLE");
 }
 

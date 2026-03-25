@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SiteLogo } from "@/components/site-logo";
 
 import { ImportResultsForm } from "@/components/room/import-results-form";
+import { PlayerPoolManager } from "@/components/room/player-pool-manager";
 import { RoomInvitePanel } from "@/components/room/room-invite-panel";
 import { StartAuctionButton } from "@/components/room/start-auction-button";
 import { TeamOwnershipPanel } from "@/components/room/team-ownership-panel";
@@ -443,7 +444,13 @@ export default async function RoomPage({
             <span style={{ fontSize: "1.2rem", opacity: 0.7 }}>▾</span>
           </summary>
           <div style={{ marginTop: "1rem" }}>
-            {snapshot.players.length === 0 ? (
+            <PlayerPoolManager
+              canManage={snapshot.currentMember.isAdmin}
+              players={snapshot.players}
+              roomCode={snapshot.room.code}
+              teams={snapshot.teams}
+            />
+            {!snapshot.currentMember.isAdmin && (snapshot.players.length === 0 ? (
               <div className="empty-state">
                 Upload a player sheet to populate round one and round two queues.
               </div>
@@ -463,7 +470,7 @@ export default async function RoomPage({
                   </div>
                 ))}
               </div>
-            )}
+            ))}
           </div>
         </details>
       </section>

@@ -39,6 +39,16 @@ export const bidSchema = z.object({
   increment: z.number().int().positive().optional(),
 });
 
+export const removePlayersSchema = z
+  .object({
+    playerIds: z.array(z.string().uuid()).default([]),
+    removeAll: z.boolean().optional().default(false),
+  })
+  .refine((value) => value.removeAll || value.playerIds.length > 0, {
+    message: "Select at least one player to remove.",
+    path: ["playerIds"],
+  });
+
 export const teamRenameSchema = z.object({
   name: z.string().trim().min(1).max(60),
 });
@@ -76,5 +86,6 @@ export type PlayerUploadRowInput = z.infer<typeof playerUploadRowSchema>;
 export type TeamUploadInput = z.infer<typeof teamUploadSchema>;
 export type TeamUploadRowInput = z.infer<typeof teamUploadRowSchema>;
 export type BidInput = z.infer<typeof bidSchema>;
+export type RemovePlayersInput = z.infer<typeof removePlayersSchema>;
 export type TradeInput = z.infer<typeof tradeSchema>;
 export type TeamOwnerInput = z.infer<typeof teamOwnerSchema>;

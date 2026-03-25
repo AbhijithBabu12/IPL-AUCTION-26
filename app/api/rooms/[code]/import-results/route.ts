@@ -98,6 +98,16 @@ function parseUnsoldSheet(ws: XLSX.WorkSheet): Array<{ name: string; role: strin
 
 export const dynamic = "force-dynamic";
 
+const UNSOLD_SHEET_NAMES = ["Unsold Players", "XSell", "XSELL", "Unsold"] as const;
+
+function findUnsoldSheetName(sheetNames: string[]) {
+  return (
+    sheetNames.find((name) =>
+      UNSOLD_SHEET_NAMES.some((candidate) => candidate.toLowerCase() === name.toLowerCase()),
+    ) ?? null
+  );
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ code: string }> },
@@ -116,8 +126,8 @@ export async function POST(
     const buffer = await file.arrayBuffer();
     const wb = XLSX.read(new Uint8Array(buffer), { type: "array" });
 
-    const UNSOLD_SHEET = "Unsold Players";
-    const teamSheetNames = wb.SheetNames.filter((n) => n !== UNSOLD_SHEET);
+    const unsoldSheetName = findUnsoldSheetName(wb.SheetNames);
+    const teamSheetNames = wb.SheetNames.filter((n) => n !== unsoldSheetName);
 
     if (teamSheetNames.length === 0) {
       throw new AppError(
@@ -131,8 +141,8 @@ export async function POST(
       parseTeamSheet(wb.Sheets[name]!, name),
     );
 
-    const unsoldPlayers = wb.Sheets[UNSOLD_SHEET]
-      ? parseUnsoldSheet(wb.Sheets[UNSOLD_SHEET]!)
+    const unsoldPlayers = unsoldSheetName && wb.Sheets[unsoldSheetName]
+      ? parseUnsoldSheet(wb.Sheets[unsoldSheetName]!)
       : [];
 
     // ── Clear existing room data ─────────────────────────────────────────────
@@ -187,7 +197,7 @@ export async function POST(
       role: p.role,
       nationality: null as null,
       base_price: p.basePrice || DEFAULT_BASE,
-      status: "UNSOLD",
+      status: "AVAILABLE",
       stats: p.iplTeam ? { ipl_team: p.iplTeam } : null,
       order_index: ++orderIndex,
       current_team_id: null as null,
@@ -222,6 +232,12 @@ export async function POST(
     }
 
     // ── Set auction state → COMPLETED ────────────────────────────────────────
+    const hasRemainingAuctionPool = unsoldRows.length > 0;
+    const nextPhase = hasRemainingAuctionPool ? "WAITING" : "COMPLETED";
+    const nextEvent = hasRemainingAuctionPool
+      ? "RESULTS_IMPORTED_WAITING"
+      : "RESULTS_IMPORTED";
+
     const { data: existing } = await admin
       .from("auction_state")
       .select("version")
@@ -232,21 +248,22 @@ export async function POST(
       await admin
         .from("auction_state")
         .update({
-          phase: "COMPLETED",
+          phase: nextPhase,
+          current_round: 1,
           current_player_id: null,
           current_bid: null,
           current_team_id: null,
           expires_at: null,
           paused_remaining_ms: null,
           skip_vote_team_ids: [],
-          last_event: "RESULTS_IMPORTED",
+          last_event: nextEvent,
           version: existing.version + 1,
         })
         .eq("room_id", room.id);
     } else {
       await admin.from("auction_state").insert({
         room_id: room.id,
-        phase: "COMPLETED",
+        phase: nextPhase,
         current_round: 1,
         current_player_id: null,
         current_bid: null,
@@ -254,7 +271,7 @@ export async function POST(
         expires_at: null,
         paused_remaining_ms: null,
         skip_vote_team_ids: [],
-        last_event: "RESULTS_IMPORTED",
+        last_event: nextEvent,
         version: 1,
       });
     }
@@ -268,6 +285,7 @@ export async function POST(
       teams: insertedTeams.length,
       soldPlayers: squadRows.length,
       unsoldPlayers: unsoldRows.length,
+      readyToContinue: hasRemainingAuctionPool,
     });
   } catch (error) {
     return handleRouteError(error);
