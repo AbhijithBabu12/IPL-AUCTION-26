@@ -847,7 +847,7 @@ button { cursor: pointer; }
 ───────────────────────────────────────────── */
 .drawer-tab-stack {
   position: fixed;
-  right: 0;
+  left: 0;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -862,7 +862,7 @@ button { cursor: pointer; }
   padding: 1rem 0.5rem;
   background: linear-gradient(180deg, var(--primary), #4f46e5);
   color: white;
-  border-radius: 12px 0 0 12px;
+  border-radius: 0 12px 12px 0;
   font-family: var(--font-display), sans-serif;
   font-size: 0.75rem;
   font-weight: 700;
@@ -870,7 +870,7 @@ button { cursor: pointer; }
   cursor: pointer;
   border: none;
   transition: opacity 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
-  box-shadow: -3px 0 14px rgba(0,0,0,0.4);
+  box-shadow: 3px 0 14px rgba(0,0,0,0.4);
 }
 
 .drawer-tab.secondary {
@@ -879,8 +879,8 @@ button { cursor: pointer; }
 
 .drawer-tab:hover {
   opacity: 0.9;
-  transform: translateX(-2px);
-  box-shadow: -6px 0 18px rgba(0,0,0,0.46);
+  transform: translateX(2px);
+  box-shadow: 6px 0 18px rgba(0,0,0,0.46);
 }
 
 .drawer-backdrop {
@@ -897,14 +897,14 @@ button { cursor: pointer; }
 
 .drawer-panel {
   position: fixed;
-  right: 0;
+  left: 0;
   top: 0;
   bottom: 0;
   width: min(380px, 92vw);
   background: rgba(13, 13, 22, 0.97);
-  border-left: 1px solid rgba(99, 102, 241, 0.18);
-  box-shadow: -16px 0 48px rgba(0,0,0,0.6);
-  transform: translateX(100%);
+  border-right: 1px solid rgba(99, 102, 241, 0.18);
+  box-shadow: 16px 0 48px rgba(0,0,0,0.6);
+  transform: translateX(-100%);
   transition: transform 0.26s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 30;
   overflow-y: auto;
