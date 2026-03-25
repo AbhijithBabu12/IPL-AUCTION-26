@@ -90,7 +90,8 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   const [resumePending, setResumePending] = useState(false);
   const [advancePending, setAdvancePending] = useState(false);
   const [optimisticPhase, setOptimisticPhase] = useState<string | null>(null);
-  const [drawerView, setDrawerView] = useState<"squads" | "chat" | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [squadOpen, setSquadOpen] = useState(false);
   const [resultOverlay, setResultOverlay] = useState<{
     kind: "SOLD" | "UNSOLD";
     playerName: string;
@@ -111,8 +112,6 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     localPlayers.find((p) => p.id === localAuctionState.currentPlayerId) ?? null;
   const currentTeam =
     localTeams.find((t) => t.id === localAuctionState.currentTeamId) ?? null;
-  const drawerOpen = drawerView !== null;
-
   const effectivePhase = optimisticPhase ?? localAuctionState.phase;
   const isAdmin = Boolean(snapshot.currentMember?.isAdmin);
   const isLive = effectivePhase === "LIVE";
@@ -766,71 +765,90 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         </div>
       )}
 
-      {/* Right-side drawer */}
       <div
-        className={`drawer-backdrop${drawerOpen ? " open" : ""}`}
-        onClick={() => setDrawerView(null)}
+        className={`drawer-backdrop${chatOpen ? " open" : ""}`}
+        onClick={() => setChatOpen(false)}
+      />
+      <div
+        className={`drawer-backdrop${squadOpen ? " open" : ""}`}
+        onClick={() => setSquadOpen(false)}
       />
 
-      <div className={`drawer-panel${drawerOpen ? " open" : ""}`}>
+      <div className={`drawer-panel drawer-panel-left${chatOpen ? " open" : ""}`}>
         <div className="drawer-header-row">
-          <div className="drawer-switcher">
-            <button
-              className={`drawer-switch${drawerView === "chat" ? " active" : ""}`}
-              onClick={() => setDrawerView("chat")}
-              type="button"
-            >
-              Chat
-            </button>
-            <button
-              className={`drawer-switch${drawerView === "squads" ? " active" : ""}`}
-              onClick={() => setDrawerView("squads")}
-              type="button"
-            >
-              Squads
-            </button>
-          </div>
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-display)",
+              letterSpacing: "-0.04em",
+            }}
+          >
+            Chat
+          </h2>
           <button
             className="button ghost"
             style={{ minHeight: "32px", padding: "0.3rem 0.75rem", fontSize: "0.85rem" }}
-            onClick={() => setDrawerView(null)}
+            onClick={() => setChatOpen(false)}
             type="button"
           >
             Close
           </button>
         </div>
-
-        {drawerView === "chat" ? (
-          <AuctionChatPanel
-            messages={chatMessages}
-            onSendEmoji={(emoji) => sendChatEntry("emoji", emoji)}
-            onSendMessage={(message) => sendChatEntry("text", message)}
-          />
-        ) : (
-          <SquadBoard
-            currentUserId={snapshot.user?.id ?? null}
-            isAdmin={isAdmin}
-            phase={localAuctionState.phase}
-            players={localPlayers}
-            roomCode={snapshot.room.code}
-            squads={localSquads}
-            teams={localTeams}
-          />
-        )}
+        <AuctionChatPanel
+          messages={chatMessages}
+          onSendEmoji={(emoji) => sendChatEntry("emoji", emoji)}
+          onSendMessage={(message) => sendChatEntry("text", message)}
+        />
       </div>
 
-      {!drawerOpen && (
-        <div className="drawer-tab-stack">
+      <div className={`drawer-panel drawer-panel-right${squadOpen ? " open" : ""}`}>
+        <div className="drawer-header-row">
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-display)",
+              letterSpacing: "-0.04em",
+            }}
+          >
+            Squads
+          </h2>
+          <button
+            className="button ghost"
+            style={{ minHeight: "32px", padding: "0.3rem 0.75rem", fontSize: "0.85rem" }}
+            onClick={() => setSquadOpen(false)}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <SquadBoard
+          currentUserId={snapshot.user?.id ?? null}
+          isAdmin={isAdmin}
+          phase={localAuctionState.phase}
+          players={localPlayers}
+          roomCode={snapshot.room.code}
+          squads={localSquads}
+          teams={localTeams}
+        />
+      </div>
+
+      {!chatOpen && (
+        <div className="drawer-tab-stack drawer-tab-stack-left">
           <button
             className="drawer-tab secondary"
-            onClick={() => setDrawerView("chat")}
+            onClick={() => setChatOpen(true)}
             type="button"
           >
             CHAT
           </button>
+        </div>
+      )}
+
+      {!squadOpen && (
+        <div className="drawer-tab-stack drawer-tab-stack-right">
           <button
             className="drawer-tab"
-            onClick={() => setDrawerView("squads")}
+            onClick={() => setSquadOpen(true)}
             type="button"
           >
             SQUADS
