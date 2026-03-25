@@ -881,7 +881,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
               <span className="brand" style={{ fontSize: "0.95rem", letterSpacing: "-0.03em" }}>
                 SFL
               </span>
-              <span style={{ opacity: 0.35, fontSize: "0.85rem" }}>Â·</span>
+              <span style={{ opacity: 0.35, fontSize: "0.85rem" }}>•</span>
               <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.9rem" }}>
                 {snapshot.room.name}
               </span>
@@ -940,7 +940,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   }
                   type="button"
                 >
-                  {pausePending ? "Pausingâ€¦" : "Pause"}
+                  {pausePending ? "Pausing..." : "Pause"}
                 </button>
                 <button
                   className="button secondary"
@@ -955,7 +955,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   }
                   type="button"
                 >
-                  {resumePending ? "Resumingâ€¦" : "Resume"}
+                  {resumePending ? "Resuming..." : "Resume"}
                 </button>
                 <button
                   className="button warning"
@@ -964,7 +964,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   onClick={() => void runAdvance()}
                   type="button"
                 >
-                  {advancePending ? "Sellingâ€¦" : "Sell / next"}
+                  {advancePending ? "Selling..." : "Sell / next"}
                 </button>
                 {effectivePhase !== "ROUND_END" && (
                   <button
@@ -1073,7 +1073,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                       ? formatCurrencyShort(currentBid)
                       : currentPlayer
                       ? formatCurrencyShort(currentPlayer.basePrice)
-                      : "â€”"}
+                      : "-"}
                   </div>
                       {currentTeam ? (
                     <div style={{ marginTop: "0.4rem" }}>
@@ -1144,7 +1144,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 <strong>
                   {localAuctionState.currentBid !== null
                     ? formatCurrencyShort(localAuctionState.currentBid)
-                    : "â€”"}
+                    : "-"}
                 </strong>
                 Current bid
               </div>
@@ -1181,7 +1181,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                           <span>
                             {player.name}
                             <span className="subtle" style={{ marginLeft: "0.4rem", fontSize: "0.8rem" }}>
-                              {player.role} Â· Base {formatCurrencyShort(player.basePrice)}
+                              {player.role} • Base {formatCurrencyShort(player.basePrice)}
                             </span>
                           </span>
                         </label>
@@ -1196,7 +1196,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     type="button"
                   >
                     {nextRoundPending
-                      ? "Startingâ€¦"
+                      ? "Starting..."
                       : localAuctionState.currentRound === 0 
                         ? `Start Auction (${selectedPlayerIds.length} players)` 
                         : `Start Round ${localAuctionState.currentRound + 1} (${selectedPlayerIds.length} players)`}
@@ -1233,7 +1233,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
 
             {effectivePhase === "ROUND_END" && !isAdmin && (
               <div className="notice warning">
-                Round {localAuctionState.currentRound} ended â€” waiting for admin to select players for the next round.
+                Round {localAuctionState.currentRound} ended - waiting for admin to select players for the next round.
               </div>
             )}
 
@@ -1267,7 +1267,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     if (item.type === "SOLD") {
                       return (
                         <div className="bid-row" key={item.id} style={{ background: "rgba(16, 185, 129, 0.1)", borderLeft: "3px solid var(--success)", paddingLeft: "0.5rem" }}>
-                          ðŸŽ‰ <strong>{player?.name ?? "Unknown player"}</strong>
+                          Sold: <strong>{player?.name ?? "Unknown player"}</strong>
                           {" bought by "}
                           <strong style={{ color: "var(--success)" }}>{team?.shortCode ?? "?"}</strong>
                           {" for "}
@@ -1348,7 +1348,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 type="button"
               >
                 {bidPending
-                  ? "â€¦"
+                  ? "..."
                   : `Open ${currentPlayer ? formatCurrencyShort(currentPlayer.basePrice) : ""}`}
               </button>
             ) : (
@@ -1368,7 +1368,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     title={`Bid ${formatCurrencyShort(nextAmount)}`}
                     type="button"
                   >
-                    {bidPending ? "â€¦" : `+${formatIncrement(inc)}`}
+                    {bidPending ? "..." : `+${formatIncrement(inc)}`}
                   </button>
                 );
               })
