@@ -20,6 +20,16 @@ function unwrapJoinedUser(row: Record<string, unknown>) {
   return (joined ?? null) as Record<string, unknown> | null;
 }
 
+function unwrapJoinedRoom(row: Record<string, unknown>) {
+  const joined = row.rooms;
+
+  if (Array.isArray(joined)) {
+    return (joined[0] ?? null) as Record<string, unknown> | null;
+  }
+
+  return (joined ?? null) as Record<string, unknown> | null;
+}
+
 export function mapRoom(row: Record<string, unknown>): Room {
   return {
     id: String(row.id),
@@ -159,15 +169,29 @@ export async function getRoomMember(roomId: string, userId: string) {
 }
 
 export async function requireRoomMember(code: string, userId: string) {
-  const room = await findRoomByCode(code);
-  const member = await getRoomMember(room.id, userId);
+  const admin = getSupabaseAdminClient();
+  const { data, error } = await admin
+    .from("room_members")
+    .select(
+      "room_id, user_id, is_admin, is_player, users(email, display_name, avatar_url), rooms!inner(id, code, name, purse, squad_size, timer_seconds, bid_increment, owner_id, created_at)",
+    )
+    .eq("user_id", userId)
+    .eq("rooms.code", code.toUpperCase())
+    .maybeSingle();
 
-  if (!member) {
+  if (error) {
+    throw new AppError(error.message, 500, "MEMBER_FETCH_FAILED");
+  }
+
+  const room = data ? unwrapJoinedRoom(data as Record<string, unknown>) : null;
+  const member = data ? mapMember(data as Record<string, unknown>) : null;
+
+  if (!member || !room) {
     throw new AppError("Join this room before accessing it.", 403, "ROOM_ACCESS_DENIED");
   }
 
   return {
-    room,
+    room: mapRoom(room),
     member,
   };
 }
