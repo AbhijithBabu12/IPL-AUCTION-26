@@ -779,7 +779,7 @@ button { cursor: pointer; }
   gap: 0.75rem;
   width: max-content;
   padding-inline: 0.75rem;
-  animation: sold-ticker-scroll 42s linear infinite;
+  animation: sold-ticker-scroll 36s linear infinite;
   will-change: transform;
 }
 
@@ -845,11 +845,18 @@ button { cursor: pointer; }
 /* ─────────────────────────────────────────────
    DRAWER
 ───────────────────────────────────────────── */
-.drawer-tab {
+.drawer-tab-stack {
   position: fixed;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  z-index: 20;
+}
+
+.drawer-tab {
   writing-mode: vertical-rl;
   text-orientation: mixed;
   padding: 1rem 0.5rem;
@@ -862,12 +869,19 @@ button { cursor: pointer; }
   letter-spacing: 0.1em;
   cursor: pointer;
   border: none;
-  z-index: 20;
-  transition: opacity 0.14s ease;
+  transition: opacity 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
   box-shadow: -3px 0 14px rgba(0,0,0,0.4);
 }
 
-.drawer-tab:hover { opacity: 0.85; }
+.drawer-tab.secondary {
+  background: linear-gradient(180deg, #0f766e, #115e59);
+}
+
+.drawer-tab:hover {
+  opacity: 0.9;
+  transform: translateX(-2px);
+  box-shadow: -6px 0 18px rgba(0,0,0,0.46);
+}
 
 .drawer-backdrop {
   position: fixed;
@@ -898,6 +912,126 @@ button { cursor: pointer; }
 }
 
 .drawer-panel.open { transform: translateX(0); }
+
+.drawer-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.drawer-switcher {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(99, 102, 241, 0.14);
+}
+
+.drawer-switch {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.drawer-switch.active {
+  background: linear-gradient(135deg, rgba(99,102,241,0.24), rgba(79,70,229,0.34));
+  color: white;
+}
+
+.auction-chat-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.auction-chat-head {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.auction-chat-emoji-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.auction-chat-log {
+  min-height: 45vh;
+  max-height: calc(100vh - 17rem);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding-right: 0.2rem;
+}
+
+.auction-chat-empty {
+  border: 1px dashed rgba(99, 102, 241, 0.2);
+  border-radius: 18px;
+  padding: 1rem;
+  color: var(--muted);
+  background: rgba(255,255,255,0.025);
+  font-size: 0.9rem;
+}
+
+.auction-chat-message {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.auction-chat-message.own {
+  justify-items: end;
+}
+
+.auction-chat-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.auction-chat-bubble {
+  max-width: 100%;
+  padding: 0.8rem 0.95rem;
+  border-radius: 18px 18px 18px 8px;
+  background: rgba(255,255,255,0.055);
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.auction-chat-message.own .auction-chat-bubble {
+  border-radius: 18px 18px 8px 18px;
+  background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(16,185,129,0.1));
+}
+
+.auction-chat-bubble.emoji {
+  font-size: 1.7rem;
+  line-height: 1;
+  padding: 0.7rem 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.2rem;
+}
+
+.auction-chat-composer {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.auction-chat-composer .input {
+  flex: 1;
+}
 
 /* ─────────────────────────────────────────────
    RESULT OVERLAY

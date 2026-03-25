@@ -1,18 +1,21 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  AuctionChatPanel,
+  type AuctionChatMessage,
+} from "@/components/auction/auction-chat-panel";
 import { BidPanel } from "@/components/auction/bid-panel";
-import { EmojiReactions } from "@/components/auction/emoji-reactions";
 import { SquadBoard } from "@/components/auction/squad-board";
 import { TimerBar } from "@/components/auction/timer-bar";
 import { TradePanel } from "@/components/trades/trade-panel";
 import { hasBrowserSupabaseEnv } from "@/lib/config";
 import { getAllowedIncrements } from "@/lib/domain/auction";
 import { ROOM_EVENTS, getRoomChannelName } from "@/lib/domain/realtime";
-import type { AuctionSnapshot, EmojiReaction } from "@/lib/domain/types";
+import type { AuctionSnapshot } from "@/lib/domain/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatCurrencyShort, formatIncrement, toErrorMessage } from "@/lib/utils";
 
@@ -39,6 +42,16 @@ type AdvancePayload = {
   winningBid: number | null;
   expiresAt: string | null;
   version: number;
+};
+
+type ChatMessagePayload = {
+  id: string;
+  kind: "text" | "emoji";
+  userId: string | null;
+  userName: string;
+  userTag?: string | null;
+  text: string;
+  sentAt: string;
 };
 
 function getRemainingSeconds(expiresAt: string | null) {
@@ -68,7 +81,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   const [localSquads, setLocalSquads] = useState(snapshot.squads);
   const [localBids, setLocalBids] = useState(snapshot.bids);
 
-  const [recentReactions, setRecentReactions] = useState<EmojiReaction[]>([]);
+  const [chatMessages, setChatMessages] = useState<AuctionChatMessage[]>([]);
   const [remainingSeconds, setRemainingSeconds] = useState(
     getRemainingSeconds(snapshot.auctionState.expiresAt),
   );
@@ -77,7 +90,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   const [resumePending, setResumePending] = useState(false);
   const [advancePending, setAdvancePending] = useState(false);
   const [optimisticPhase, setOptimisticPhase] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerView, setDrawerView] = useState<"squads" | "chat" | null>(null);
   const [resultOverlay, setResultOverlay] = useState<{
     kind: "SOLD" | "UNSOLD";
     playerName: string;
@@ -90,7 +103,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   const [bidPending, setBidPending] = useState(false);
   const [bidError, setBidError] = useState<string | null>(null);
 
-  // ROUND_END — player picker for next round
+  // ROUND_END â€” player picker for next round
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [nextRoundPending, setNextRoundPending] = useState(false);
 
@@ -98,6 +111,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     localPlayers.find((p) => p.id === localAuctionState.currentPlayerId) ?? null;
   const currentTeam =
     localTeams.find((t) => t.id === localAuctionState.currentTeamId) ?? null;
+  const drawerOpen = drawerView !== null;
 
   const effectivePhase = optimisticPhase ?? localAuctionState.phase;
   const isAdmin = Boolean(snapshot.currentMember?.isAdmin);
@@ -168,7 +182,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     }, 75);
   }, []);
 
-  // Timer — stops immediately when optimistic phase is PAUSED
+  // Timer â€” stops immediately when optimistic phase is PAUSED
   useEffect(() => {
     setRemainingSeconds(getRemainingSeconds(localAuctionState.expiresAt));
 
@@ -223,9 +237,25 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         { event: "*", schema: "public", table: "trades", filter: `room_id=eq.${snapshot.room.id}` },
         () => refreshRoom(),
       )
-      .on("broadcast", { event: ROOM_EVENTS.emoji }, ({ payload }) => {
-        const reaction = payload as EmojiReaction;
-        setRecentReactions((curr) => [reaction, ...curr].slice(0, 12));
+      .on("broadcast", { event: ROOM_EVENTS.chatMessage }, ({ payload }) => {
+        const message = payload as ChatMessagePayload;
+        setChatMessages((curr) => {
+          if (curr.some((entry) => entry.id === message.id)) {
+            return curr;
+          }
+          return [
+            ...curr,
+            {
+              id: message.id,
+              kind: message.kind,
+              userName: message.userName,
+              userTag: message.userTag,
+              text: message.text,
+              sentAt: message.sentAt,
+              isOwn: message.userId !== null && message.userId === snapshot.user?.id,
+            },
+          ].slice(-50);
+        });
       })
       .on("broadcast", { event: ROOM_EVENTS.newBid }, ({ payload }) => {
         const next = payload as BidPlacedPayload;
@@ -325,7 +355,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         }));
         setRemainingSeconds(getRemainingSeconds(next.expiresAt));
 
-        // Show SOLD/UNSOLD overlay directly from the broadcast payload —
+        // Show SOLD/UNSOLD overlay directly from the broadcast payload â€”
         // this is reliable for ALL clients, including members who didn't place the bid.
         if (next.previousPlayerId && next.previousPlayerStatus) {
           const prevPlayerName =
@@ -664,27 +694,37 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     }
   }
 
-  async function sendReaction(emoji: string) {
-    let context: string | undefined;
-    if (currentPlayer) {
-      if (localAuctionState.currentBid && currentTeam) {
-        context = `${currentPlayer.name} · ${formatCurrencyShort(localAuctionState.currentBid)} → ${currentTeam.shortCode}`;
-      } else {
-        context = currentPlayer.name;
-      }
-    }
-    const reaction: EmojiReaction = {
-      emoji,
-      sentAt: new Date().toISOString(),
+  async function sendChatEntry(kind: "text" | "emoji", text: string) {
+    const payload: ChatMessagePayload = {
+      id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind,
+      userId: snapshot.user?.id ?? null,
       userName: snapshot.user?.displayName ?? snapshot.user?.email ?? "Member",
-      context,
+      userTag: myOwnedTeam?.shortCode ?? (isAdmin ? "ADMIN" : null),
+      text,
+      sentAt: new Date().toISOString(),
     };
-    setRecentReactions((curr) => [reaction, ...curr].slice(0, 12));
+
+    setChatMessages((curr) =>
+      [
+        ...curr,
+        {
+          id: payload.id,
+          kind: payload.kind,
+          userName: payload.userName,
+          userTag: payload.userTag,
+          text: payload.text,
+          sentAt: payload.sentAt,
+          isOwn: true,
+        },
+      ].slice(-50),
+    );
+
     if (!channelRef.current) return;
     await channelRef.current.send({
       type: "broadcast",
-      event: ROOM_EVENTS.emoji,
-      payload: reaction,
+      event: ROOM_EVENTS.chatMessage,
+      payload,
     });
   }
 
@@ -726,60 +766,76 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         </div>
       )}
 
-      {/* Squad drawer backdrop */}
+      {/* Right-side drawer */}
       <div
         className={`drawer-backdrop${drawerOpen ? " open" : ""}`}
-        onClick={() => setDrawerOpen(false)}
+        onClick={() => setDrawerView(null)}
       />
 
-      {/* Squad drawer */}
       <div className={`drawer-panel${drawerOpen ? " open" : ""}`}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "1rem",
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontFamily: "var(--font-display)",
-              letterSpacing: "-0.04em",
-            }}
-          >
-            Squads
-          </h2>
+        <div className="drawer-header-row">
+          <div className="drawer-switcher">
+            <button
+              className={`drawer-switch${drawerView === "chat" ? " active" : ""}`}
+              onClick={() => setDrawerView("chat")}
+              type="button"
+            >
+              Chat
+            </button>
+            <button
+              className={`drawer-switch${drawerView === "squads" ? " active" : ""}`}
+              onClick={() => setDrawerView("squads")}
+              type="button"
+            >
+              Squads
+            </button>
+          </div>
           <button
             className="button ghost"
             style={{ minHeight: "32px", padding: "0.3rem 0.75rem", fontSize: "0.85rem" }}
-            onClick={() => setDrawerOpen(false)}
+            onClick={() => setDrawerView(null)}
             type="button"
           >
-            ✕ Close
+            Close
           </button>
         </div>
-        <SquadBoard
-          currentUserId={snapshot.user?.id ?? null}
-          isAdmin={isAdmin}
-          phase={localAuctionState.phase}
-          players={localPlayers}
-          roomCode={snapshot.room.code}
-          squads={localSquads}
-          teams={localTeams}
-        />
+
+        {drawerView === "chat" ? (
+          <AuctionChatPanel
+            messages={chatMessages}
+            onSendEmoji={(emoji) => sendChatEntry("emoji", emoji)}
+            onSendMessage={(message) => sendChatEntry("text", message)}
+          />
+        ) : (
+          <SquadBoard
+            currentUserId={snapshot.user?.id ?? null}
+            isAdmin={isAdmin}
+            phase={localAuctionState.phase}
+            players={localPlayers}
+            roomCode={snapshot.room.code}
+            squads={localSquads}
+            teams={localTeams}
+          />
+        )}
       </div>
 
-      {/* Drawer toggle tab */}
       {!drawerOpen && (
-        <button
-          className="drawer-tab"
-          onClick={() => setDrawerOpen(true)}
-          type="button"
-        >
-          SQUADS
-        </button>
+        <div className="drawer-tab-stack">
+          <button
+            className="drawer-tab secondary"
+            onClick={() => setDrawerView("chat")}
+            type="button"
+          >
+            CHAT
+          </button>
+          <button
+            className="drawer-tab"
+            onClick={() => setDrawerView("squads")}
+            type="button"
+          >
+            SQUADS
+          </button>
+        </div>
       )}
 
       <div className="auction-full">
@@ -807,7 +863,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
               <span className="brand" style={{ fontSize: "0.95rem", letterSpacing: "-0.03em" }}>
                 SFL
               </span>
-              <span style={{ opacity: 0.35, fontSize: "0.85rem" }}>·</span>
+              <span style={{ opacity: 0.35, fontSize: "0.85rem" }}>Â·</span>
               <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.9rem" }}>
                 {snapshot.room.name}
               </span>
@@ -866,7 +922,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   }
                   type="button"
                 >
-                  {pausePending ? "Pausing…" : "Pause"}
+                  {pausePending ? "Pausingâ€¦" : "Pause"}
                 </button>
                 <button
                   className="button secondary"
@@ -881,7 +937,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   }
                   type="button"
                 >
-                  {resumePending ? "Resuming…" : "Resume"}
+                  {resumePending ? "Resumingâ€¦" : "Resume"}
                 </button>
                 <button
                   className="button warning"
@@ -890,7 +946,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   onClick={() => void runAdvance()}
                   type="button"
                 >
-                  {advancePending ? "Selling…" : "Sell / next"}
+                  {advancePending ? "Sellingâ€¦" : "Sell / next"}
                 </button>
                 {effectivePhase !== "ROUND_END" && (
                   <button
@@ -999,7 +1055,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                       ? formatCurrencyShort(currentBid)
                       : currentPlayer
                       ? formatCurrencyShort(currentPlayer.basePrice)
-                      : "—"}
+                      : "â€”"}
                   </div>
                       {currentTeam ? (
                     <div style={{ marginTop: "0.4rem" }}>
@@ -1070,13 +1126,13 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 <strong>
                   {localAuctionState.currentBid !== null
                     ? formatCurrencyShort(localAuctionState.currentBid)
-                    : "—"}
+                    : "â€”"}
                 </strong>
                 Current bid
               </div>
             </div>
 
-            {/* ROUND_END — admin picks players for next round */}
+            {/* ROUND_END â€” admin picks players for next round */}
             {effectivePhase === "ROUND_END" && isAdmin && (
               <div className="panel" style={{ borderColor: "rgba(183,121,31,0.3)", background: "rgba(183,121,31,0.04)" }}>
                 <h3 style={{ margin: "0 0 0.25rem" }}>Round {localAuctionState.currentRound} complete</h3>
@@ -1107,7 +1163,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                           <span>
                             {player.name}
                             <span className="subtle" style={{ marginLeft: "0.4rem", fontSize: "0.8rem" }}>
-                              {player.role} · Base {formatCurrencyShort(player.basePrice)}
+                              {player.role} Â· Base {formatCurrencyShort(player.basePrice)}
                             </span>
                           </span>
                         </label>
@@ -1122,7 +1178,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     type="button"
                   >
                     {nextRoundPending
-                      ? "Starting…"
+                      ? "Startingâ€¦"
                       : localAuctionState.currentRound === 0 
                         ? `Start Auction (${selectedPlayerIds.length} players)` 
                         : `Start Round ${localAuctionState.currentRound + 1} (${selectedPlayerIds.length} players)`}
@@ -1159,7 +1215,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
 
             {effectivePhase === "ROUND_END" && !isAdmin && (
               <div className="notice warning">
-                Round {localAuctionState.currentRound} ended — waiting for admin to select players for the next round.
+                Round {localAuctionState.currentRound} ended â€” waiting for admin to select players for the next round.
               </div>
             )}
 
@@ -1193,7 +1249,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     if (item.type === "SOLD") {
                       return (
                         <div className="bid-row" key={item.id} style={{ background: "rgba(16, 185, 129, 0.1)", borderLeft: "3px solid var(--success)", paddingLeft: "0.5rem" }}>
-                          🎉 <strong>{player?.name ?? "Unknown player"}</strong>
+                          ðŸŽ‰ <strong>{player?.name ?? "Unknown player"}</strong>
                           {" bought by "}
                           <strong style={{ color: "var(--success)" }}>{team?.shortCode ?? "?"}</strong>
                           {" for "}
@@ -1216,9 +1272,6 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
               </div>
             </div>
 
-            {/* Emoji reactions */}
-            <EmojiReactions onSend={sendReaction} recent={recentReactions} />
-
             {/* Trades */}
             <TradePanel
               currentUserId={snapshot.user?.id ?? null}
@@ -1232,7 +1285,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
           </div>
         </div>
 
-        {/* BOTTOM BID BAR — non-admin players */}
+        {/* BOTTOM BID BAR â€” non-admin players */}
         {showPlayerBidBar && (
           <footer className="auction-bottom-bar">
             {bidBarTeams.length > 1 && (
@@ -1277,7 +1330,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 type="button"
               >
                 {bidPending
-                  ? "…"
+                  ? "â€¦"
                   : `Open ${currentPlayer ? formatCurrencyShort(currentPlayer.basePrice) : ""}`}
               </button>
             ) : (
@@ -1297,7 +1350,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     title={`Bid ${formatCurrencyShort(nextAmount)}`}
                     type="button"
                   >
-                    {bidPending ? "…" : `+${formatIncrement(inc)}`}
+                    {bidPending ? "â€¦" : `+${formatIncrement(inc)}`}
                   </button>
                 );
               })
@@ -1308,3 +1361,5 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     </>
   );
 }
+
+
