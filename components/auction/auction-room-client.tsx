@@ -913,15 +913,19 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
 
         {soldTickerItems.length > 0 && (
           <div className="sold-ticker">
-            <div className="sold-ticker-track">
-              {[...soldTickerItems, ...soldTickerItems].map((item, index) => (
-                <div className="sold-ticker-item" key={`${item.id}-${index}`}>
-                  <span className="sold-ticker-label">SOLD</span>
-                  <strong>{item.playerName}</strong>
-                  <span className="subtle">{item.teamCode}</span>
-                  <span className="sold-ticker-price">{formatCurrencyShort(item.amount)}</span>
-                </div>
-              ))}
+            <div className="sold-ticker-marquee">
+              <div className="sold-ticker-track">
+                {Array.from({ length: 4 }).flatMap((_, loopIndex) =>
+                  soldTickerItems.map((item) => (
+                    <div className="sold-ticker-item" key={`${item.id}-${loopIndex}`}>
+                      <span className="sold-ticker-label">SOLD</span>
+                      <strong>{item.playerName}</strong>
+                      <span className="subtle">{item.teamCode}</span>
+                      <span className="sold-ticker-price">{formatCurrencyShort(item.amount)}</span>
+                    </div>
+                  )),
+                )}
+              </div>
             </div>
           </div>
         )}
