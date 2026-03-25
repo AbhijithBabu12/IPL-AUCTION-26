@@ -774,7 +774,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         onClick={() => setSquadOpen(false)}
       />
 
-      <div className={`drawer-panel drawer-panel-left${chatOpen ? " open" : ""}`}>
+      <div className={`drawer-panel drawer-panel-left drawer-panel-chat${chatOpen ? " open" : ""}`}>
         <div className="drawer-header-row">
           <h2
             style={{

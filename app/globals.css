@@ -940,6 +940,12 @@ button { cursor: pointer; }
   transform: translateX(100%);
 }
 
+.drawer-panel-chat {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .drawer-header-row {
   display: flex;
   justify-content: space-between;
@@ -976,6 +982,8 @@ button { cursor: pointer; }
 
 .auction-chat-panel {
   display: grid;
+  flex: 1;
+  min-height: 0;
   gap: 0.9rem;
 }
 
@@ -991,8 +999,9 @@ button { cursor: pointer; }
 }
 
 .auction-chat-log {
-  min-height: 45vh;
-  max-height: calc(100vh - 17rem);
+  min-height: 0;
+  max-height: none;
+  flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
