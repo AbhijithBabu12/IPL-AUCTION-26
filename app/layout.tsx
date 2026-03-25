@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { Outfit, Inter } from "next/font/google";
-import dynamic from "next/dynamic";
+import IntroSplashWrapper from "@/components/intro-splash-wrapper";
 
 import "./globals.css";
 
@@ -15,10 +15,6 @@ const bodyFont = Inter({
   variable: "--font-body",
 });
 
-// Loaded client-side only — avoids SSR / hydration mismatch
-const IntroSplash = dynamic(() => import("@/components/intro-splash"), {
-  ssr: false,
-});
 
 export const metadata: Metadata = {
   title: "SFL Auction Platform",
@@ -33,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${displayFont.variable} ${bodyFont.variable}`}>
-        <IntroSplash />
+        <IntroSplashWrapper />
         {children}
       </body>
     </html>
