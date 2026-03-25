@@ -1,8 +1,7 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { SiteLogo } from "@/components/site-logo";
 
 import { ImportResultsForm } from "@/components/room/import-results-form";
-import { PlayerPoolManager } from "@/components/room/player-pool-manager";
 import { ReadinessPanel } from "@/components/room/readiness-panel";
 import { RoomInvitePanel } from "@/components/room/room-invite-panel";
 import { StartAuctionButton } from "@/components/room/start-auction-button";
@@ -159,7 +158,7 @@ export default async function RoomPage({
                 <UploadTeamsForm roomCode={snapshot.room.code} />
               </div>
 
-              {/* Admin My Team — same panel as member view */}
+              {/* Admin My Team â€” same panel as member view */}
               <div className="panel" style={{ borderColor: "rgba(251,191,36,0.18)", background: "linear-gradient(145deg, rgba(251,191,36,0.05), rgba(10,8,30,0.5))" }}>
                 <h2 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <span>My Team</span>
@@ -267,7 +266,7 @@ export default async function RoomPage({
               <div style={{ marginTop: "1rem" }}>
                 {snapshot.members.length === 1 ? (
                   <div className="notice" style={{ marginBottom: "0.75rem" }}>
-                    Running solo — you control all teams. No other participants needed.
+                    Running solo â€” you control all teams. No other participants needed.
                   </div>
                 ) : null}
                 <StartAuctionButton
@@ -336,42 +335,6 @@ export default async function RoomPage({
             scrollable={false}
           />
         </div>
-
-        <details className="panel" style={{ cursor: "pointer", transition: "all 0.2s ease" }}>
-          <summary style={{ ...summaryButtonStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h2 style={{ margin: 0 }}>Player Pool ({snapshot.players.length})</h2>
-            <span style={{ fontSize: "1.2rem", opacity: 0.7 }}>▾</span>
-          </summary>
-          <div style={{ marginTop: "1rem" }}>
-            <PlayerPoolManager
-              canManage={snapshot.currentMember.isAdmin}
-              players={snapshot.players}
-              roomCode={snapshot.room.code}
-              teams={snapshot.teams}
-            />
-            {!snapshot.currentMember.isAdmin && (snapshot.players.length === 0 ? (
-              <div className="empty-state">
-                Upload a player sheet to populate round one and round two queues.
-              </div>
-            ) : (
-              <div className="table-like">
-                {snapshot.players.slice(0, 12).map((player) => (
-                  <div className="room-card" key={player.id}>
-                    <div className="header-row">
-                      <strong>{player.name}</strong>
-                      <span className="pill">{player.status}</span>
-                    </div>
-                    <div className="subtle">
-                      {player.role}
-                      {player.nationality ? ` • ${player.nationality}` : ""} •{" "}
-                      {formatCurrency(player.basePrice)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </details>
       </section>
 
       {snapshot.teams.length > 1 && (

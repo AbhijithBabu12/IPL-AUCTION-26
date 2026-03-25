@@ -693,6 +693,19 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   })), ...localSquads.map(sq => ({
     type: "SOLD" as const, id: `sq-${sq.id}`, createdAt: sq.createdAt, teamId: sq.teamId, playerId: sq.playerId, amount: sq.purchasePrice
   }))].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 12);
+  const soldTickerItems = [...localSquads]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10)
+    .map((entry) => {
+      const player = localPlayers.find((item) => item.id === entry.playerId);
+      const team = localTeams.find((item) => item.id === entry.teamId);
+      return {
+        id: entry.id,
+        playerName: player?.name ?? "Unknown player",
+        teamCode: team?.shortCode ?? "?",
+        amount: entry.purchasePrice,
+      };
+    });
 
   return (
     <>
@@ -897,6 +910,21 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
             </span>
           </div>
         </header>
+
+        {soldTickerItems.length > 0 && (
+          <div className="sold-ticker">
+            <div className="sold-ticker-track">
+              {[...soldTickerItems, ...soldTickerItems].map((item, index) => (
+                <div className="sold-ticker-item" key={`${item.id}-${index}`}>
+                  <span className="sold-ticker-label">SOLD</span>
+                  <strong>{item.playerName}</strong>
+                  <span className="subtle">{item.teamCode}</span>
+                  <span className="sold-ticker-price">{formatCurrencyShort(item.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* MAIN BODY */}
         <div className={`auction-body${showPlayerBidBar ? " has-bottom-bar" : ""}`}>
