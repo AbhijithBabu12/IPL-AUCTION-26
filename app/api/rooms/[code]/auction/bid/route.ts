@@ -20,11 +20,20 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ code: string }> },
 ) {
+  const startedAt = Date.now();
+  const marks: Array<{ step: string; ms: number }> = [];
+  const mark = (step: string) => {
+    marks.push({ step, ms: Date.now() - startedAt });
+  };
   try {
     const { code } = await context.params;
+    mark("params");
     const authUser = await requireApiUser();
+    mark("requireApiUser");
     const { room, member } = await requireRoomMember(code, authUser.id);
+    mark("requireRoomMember");
     const input = await readJson(request, bidSchema);
+    mark("readJson");
     const admin = getSupabaseAdminClient();
     
     // Instead of fetching all 600+ players using getRoomEntities, surgically query only what is needed
@@ -37,6 +46,7 @@ export async function POST(
         .eq("room_id", room.id)
         .eq("team_id", input.teamId),
     ]);
+    mark("initialQueries");
 
     if (!auctionRow) {
       throw new AppError("Auction has not started yet.", 400, "NO_AUCTION_STATE");
@@ -49,6 +59,7 @@ export async function POST(
       .select("*")
       .eq("id", auctionState.currentPlayerId ?? "")
       .maybeSingle();
+    mark("playerQuery");
 
     const currentPlayer = playerRow ? mapPlayer(playerRow as Record<string, unknown>) : null;
     const team = teamRow ? mapTeam(teamRow as Record<string, unknown>) : null;
@@ -97,6 +108,7 @@ export async function POST(
       .eq("version", auctionState.version)
       .select("*")
       .maybeSingle();
+    mark("auctionStateUpdate");
 
     if (updateError) {
       throw new AppError(updateError.message, 500, "BID_UPDATE_FAILED");
@@ -117,13 +129,31 @@ export async function POST(
       amount: nextBidAmount,
       created_by: authUser.id,
     });
+    mark("bidInsert");
 
     if (bidError) {
       throw new AppError(bidError.message, 500, "BID_LOG_FAILED");
     }
 
-    return NextResponse.json({ amount: nextBidAmount });
+    const timing = {
+      totalMs: Date.now() - startedAt,
+      steps: marks,
+    };
+    console.info("[auction-bid-timing]", JSON.stringify({ roomCode: room.code, timing }));
+    return NextResponse.json(
+      { amount: nextBidAmount, timing },
+      {
+        headers: {
+          "x-auction-bid-ms": String(timing.totalMs),
+        },
+      },
+    );
   } catch (error) {
+    console.error("[auction-bid-error-timing]", JSON.stringify({
+      totalMs: Date.now() - startedAt,
+      steps: marks,
+      message: error instanceof Error ? error.message : String(error),
+    }));
     return handleRouteError(error);
   }
 }

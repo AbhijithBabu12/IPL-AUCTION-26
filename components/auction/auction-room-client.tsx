@@ -601,12 +601,22 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ teamId, increment }),
       });
-      const payload = (await res.json()) as { error?: string; amount?: number };
+      const payload = (await res.json()) as {
+        error?: string;
+        amount?: number;
+        timing?: {
+          totalMs: number;
+          steps: Array<{ step: string; ms: number }>;
+        };
+      };
       if (!res.ok) {
         const message = payload.error ?? "Bid failed.";
         setBidError(message);
         return message;
       } else {
+        if (payload.timing) {
+          console.info("[auction-bid-client-timing]", payload.timing);
+        }
         const nextAmount = payload.amount ?? currentBid ?? currentPlayer?.basePrice ?? 0;
         const nextExpiresAt = new Date(
           Date.now() + snapshot.room.timerSeconds * 1000,
