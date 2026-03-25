@@ -1,18 +1,11 @@
-"use client";
+ï»¿"use client";
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import sflLogo from "@/app/images/sfl.png";
 
-const PHASES: number[] = [
-  0,
-  400,
-  1300,
-  2100,
-  3100,
-  4300,
-];
+const PHASES: number[] = [0, 400, 1300, 2100, 3100, 4300];
 
 export default function IntroSplash() {
   const [phase, setPhase] = useState<number>(-1);
@@ -59,7 +52,7 @@ export default function IntroSplash() {
           <span>L</span>
         </div>
         <div className="sfl-intro-tagline">St. Thomas Fantasy League</div>
-        <div className="sfl-intro-edition">AUCTION PLATFORM · 2026</div>
+        <div className="sfl-intro-edition">AUCTION PLATFORM - 2026</div>
       </div>
 
       <div className="sfl-intro-rule" />
