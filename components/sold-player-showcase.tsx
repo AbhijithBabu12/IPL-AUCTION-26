@@ -38,16 +38,21 @@ export function SoldPlayerShowcase({
 
   const selectedItem =
     orderedItems.find((item) => item.id === selectedId) ?? orderedItems[0] ?? null;
-  const renderedItems = useMemo(() => [...orderedItems, ...orderedItems], [orderedItems]);
+  const renderedItems = useMemo(
+    () => [...orderedItems, ...orderedItems, ...orderedItems],
+    [orderedItems],
+  );
 
   useEffect(() => {
     const track = trackRef.current;
     if (!track || orderedItems.length === 0) return;
 
     const pixelsPerSecond = variant === "ticker" ? 22 : 17;
+    const segmentWidth = track.scrollWidth / 3;
+    offsetRef.current = segmentWidth;
+    track.style.transform = `translateX(-${offsetRef.current}px)`;
 
     const step = (time: number) => {
-      const segmentWidth = track.scrollWidth / 2;
       if (lastFrameRef.current === null) {
         lastFrameRef.current = time;
       }
@@ -57,7 +62,7 @@ export function SoldPlayerShowcase({
 
       if (!isPaused && segmentWidth > 0) {
         offsetRef.current += (pixelsPerSecond * deltaMs) / 1000;
-        if (offsetRef.current >= segmentWidth) {
+        if (offsetRef.current >= segmentWidth * 2) {
           offsetRef.current -= segmentWidth;
         }
         track.style.transform = `translateX(-${offsetRef.current}px)`;
