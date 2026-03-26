@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { Player, RoomMember, Team } from "@/lib/domain/types";
 import {
@@ -47,6 +47,7 @@ export function ReadinessPanel({
   phase,
   players,
   roomCode,
+  squadSize,
   teams,
 }: {
   isAdmin: boolean;
@@ -54,6 +55,7 @@ export function ReadinessPanel({
   phase: string;
   players: Player[];
   roomCode: string;
+  squadSize: number;
   teams: Team[];
 }) {
   const router = useRouter();
@@ -61,9 +63,21 @@ export function ReadinessPanel({
   const [pendingTeamId, setPendingTeamId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openList, setOpenList] = useState<PlayerListKey>(null);
+  const [pendingSquadSize, setPendingSquadSize] = useState(false);
+  const [squadSizeDraft, setSquadSizeDraft] = useState(String(squadSize));
   const [purseDrafts, setPurseDrafts] = useState<Record<string, string>>(
     Object.fromEntries(teams.map((team) => [team.id, formatAmountInput(team.purseRemaining)])),
   );
+
+  useEffect(() => {
+    setSquadSizeDraft(String(squadSize));
+  }, [squadSize]);
+
+  useEffect(() => {
+    setPurseDrafts(
+      Object.fromEntries(teams.map((team) => [team.id, formatAmountInput(team.purseRemaining)])),
+    );
+  }, [teams]);
 
   const availablePlayerList = useMemo(
     () => players.filter((player) => player.status === "AVAILABLE"),
@@ -130,6 +144,32 @@ export function ReadinessPanel({
       setError(toErrorMessage(updateError));
     } finally {
       setPendingTeamId(null);
+    }
+  }
+
+  async function updateSquadSize() {
+    setPendingSquadSize(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/rooms/${roomCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          squadSize: Number(squadSizeDraft),
+        }),
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to update squad size.");
+      }
+
+      router.refresh();
+    } catch (updateError) {
+      setError(toErrorMessage(updateError));
+    } finally {
+      setPendingSquadSize(false);
     }
   }
 
@@ -201,6 +241,50 @@ export function ReadinessPanel({
 
   return (
     <>
+      {isAdmin ? (
+        <div
+          className="panel"
+          style={{
+            marginBottom: "1rem",
+            padding: "0.9rem",
+            background: "rgba(255,255,255,0.03)",
+            borderColor: "rgba(99,102,241,0.16)",
+          }}
+        >
+          <div style={{ display: "grid", gap: "0.45rem" }}>
+            <div style={{ fontWeight: 700 }}>Room squad size</div>
+            <div className="subtle" style={{ fontSize: "0.8rem" }}>
+              Update the squad limit for the room and sync all teams together.
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1fr) auto",
+                gap: "0.55rem",
+              }}
+            >
+              <input
+                className="input"
+                disabled={pendingSquadSize || phase === "LIVE" || phase === "PAUSED"}
+                min={1}
+                max={40}
+                onChange={(event) => setSquadSizeDraft(event.target.value)}
+                type="number"
+                value={squadSizeDraft}
+              />
+              <button
+                className="button ghost"
+                disabled={pendingSquadSize || phase === "LIVE" || phase === "PAUSED"}
+                onClick={() => void updateSquadSize()}
+                type="button"
+              >
+                {pendingSquadSize ? "Saving..." : "Save limit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="stats-strip">
         <details className="stat-tile" style={{ cursor: "pointer" }}>
           <summary style={summaryButtonStyle}>

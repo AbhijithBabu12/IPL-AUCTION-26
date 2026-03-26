@@ -12,6 +12,7 @@ import { SelfCreateTeamForm } from "@/components/room/self-create-team-form";
 import { TradePanel } from "@/components/trades/trade-panel";
 import { DashboardAutoRefresher } from "@/components/dashboard-auto-refresher";
 import { SquadBoard } from "@/components/auction/squad-board";
+import { SoldPlayerShowcase } from "@/components/sold-player-showcase";
 import { defaultPlayerPoolCount } from "@/lib/default-player-pool";
 import { hasServiceRoleEnv } from "@/lib/config";
 import { requireSessionUser } from "@/lib/server/auth";
@@ -67,6 +68,19 @@ export default async function RoomPage({
     display: "block",
     cursor: "pointer",
   } as const;
+  const soldShowcaseItems = snapshot.squads
+    .map((entry) => {
+      const player = snapshot.players.find((item) => item.id === entry.playerId);
+      const team = snapshot.teams.find((item) => item.id === entry.teamId);
+      return {
+        id: entry.id,
+        playerName: player?.name ?? "Unknown player",
+        teamCode: team?.shortCode ?? "?",
+        teamName: team?.name ?? null,
+        amount: entry.purchasePrice,
+        role: player?.role ?? null,
+      };
+    });
 
   return (
     <main className="shell">
@@ -133,6 +147,16 @@ export default async function RoomPage({
           <RoomInvitePanel
             roomCode={snapshot.room.code}
             roomName={snapshot.room.name}
+          />
+        </section>
+      ) : null}
+
+      {soldShowcaseItems.length > 0 ? (
+        <section className="panel" style={{ marginTop: "1rem" }}>
+          <SoldPlayerShowcase
+            items={soldShowcaseItems}
+            title="Top sold players"
+            variant="cards"
           />
         </section>
       ) : null}
@@ -259,6 +283,7 @@ export default async function RoomPage({
               phase={snapshot.auctionState?.phase ?? "WAITING"}
               players={snapshot.players}
               roomCode={snapshot.room.code}
+              squadSize={snapshot.room.squadSize}
               teams={snapshot.teams}
             />
             {snapshot.currentMember.isAdmin &&

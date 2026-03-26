@@ -11,6 +11,7 @@ import {
 import { BidPanel } from "@/components/auction/bid-panel";
 import { SquadBoard } from "@/components/auction/squad-board";
 import { TimerBar } from "@/components/auction/timer-bar";
+import { SoldPlayerShowcase } from "@/components/sold-player-showcase";
 import { TradePanel } from "@/components/trades/trade-panel";
 import { hasBrowserSupabaseEnv } from "@/lib/config";
 import { getAllowedIncrements } from "@/lib/domain/auction";
@@ -733,8 +734,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     type: "SOLD" as const, id: `sq-${sq.id}`, createdAt: sq.createdAt, teamId: sq.teamId, playerId: sq.playerId, amount: sq.purchasePrice
   }))].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 12);
   const soldTickerItems = [...localSquads]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 10)
+    .slice()
     .map((entry) => {
       const player = localPlayers.find((item) => item.id === entry.playerId);
       const team = localTeams.find((item) => item.id === entry.teamId);
@@ -742,7 +742,9 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         id: entry.id,
         playerName: player?.name ?? "Unknown player",
         teamCode: team?.shortCode ?? "?",
+        teamName: team?.name ?? null,
         amount: entry.purchasePrice,
+        role: player?.role ?? null,
       };
     });
 
@@ -986,22 +988,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         </header>
 
         {soldTickerItems.length > 0 && (
-          <div className="sold-ticker">
-            <div className="sold-ticker-marquee">
-              <div className="sold-ticker-track">
-                {Array.from({ length: 4 }).flatMap((_, loopIndex) =>
-                  soldTickerItems.map((item) => (
-                    <div className="sold-ticker-item" key={`${item.id}-${loopIndex}`}>
-                      <span className="sold-ticker-label">SOLD</span>
-                      <strong>{item.playerName}</strong>
-                      <span className="subtle">{item.teamCode}</span>
-                      <span className="sold-ticker-price">{formatCurrencyShort(item.amount)}</span>
-                    </div>
-                  )),
-                )}
-              </div>
-            </div>
-          </div>
+          <SoldPlayerShowcase items={soldTickerItems} variant="ticker" />
         )}
 
         {/* MAIN BODY */}
