@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { formatCurrencyShort } from "@/lib/utils";
 
@@ -27,9 +27,20 @@ export function SoldPlayerShowcase({
     [items],
   );
   const [selectedId, setSelectedId] = useState<string | null>(orderedItems[0]?.id ?? null);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedItem =
     orderedItems.find((item) => item.id === selectedId) ?? orderedItems[0] ?? null;
+
+  function scrollByAmount(direction: "left" | "right") {
+    const node = scrollerRef.current;
+    if (!node) return;
+    const amount = Math.max(220, Math.floor(node.clientWidth * 0.72));
+    node.scrollBy({
+      left: direction === "left" ? -amount : amount,
+      behavior: "smooth",
+    });
+  }
 
   if (orderedItems.length === 0) {
     return null;
@@ -46,13 +57,21 @@ export function SoldPlayerShowcase({
         </div>
       ) : null}
 
-      <div className="sold-showcase-marquee">
-        <div className="sold-showcase-track">
-          {Array.from({ length: 3 }).flatMap((_, loopIndex) =>
-            orderedItems.map((item) => (
+      <div className="sold-showcase-slider">
+        <button
+          aria-label="Scroll sold players left"
+          className="sold-showcase-nav"
+          onClick={() => scrollByAmount("left")}
+          type="button"
+        >
+          ‹
+        </button>
+        <div className="sold-showcase-scroller" ref={scrollerRef}>
+          <div className="sold-showcase-track">
+            {orderedItems.map((item) => (
               <button
                 className={`sold-showcase-item${selectedItem?.id === item.id ? " active" : ""}`}
-                key={`${item.id}-${loopIndex}`}
+                key={item.id}
                 onClick={() => setSelectedId(item.id)}
                 type="button"
               >
@@ -61,9 +80,17 @@ export function SoldPlayerShowcase({
                 <span className="subtle">{item.teamCode}</span>
                 <span className="sold-showcase-price">{formatCurrencyShort(item.amount)}</span>
               </button>
-            )),
-          )}
+            ))}
+          </div>
         </div>
+        <button
+          aria-label="Scroll sold players right"
+          className="sold-showcase-nav"
+          onClick={() => scrollByAmount("right")}
+          type="button"
+        >
+          ›
+        </button>
       </div>
 
       {selectedItem ? (
