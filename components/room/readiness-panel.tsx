@@ -48,6 +48,7 @@ export function ReadinessPanel({
   players,
   roomCode,
   squadSize,
+  timerSeconds,
   teams,
 }: {
   isAdmin: boolean;
@@ -56,6 +57,7 @@ export function ReadinessPanel({
   players: Player[];
   roomCode: string;
   squadSize: number;
+  timerSeconds: number;
   teams: Team[];
 }) {
   const router = useRouter();
@@ -64,7 +66,9 @@ export function ReadinessPanel({
   const [error, setError] = useState<string | null>(null);
   const [openList, setOpenList] = useState<PlayerListKey>(null);
   const [pendingSquadSize, setPendingSquadSize] = useState(false);
+  const [pendingTimerSeconds, setPendingTimerSeconds] = useState(false);
   const [squadSizeDraft, setSquadSizeDraft] = useState(String(squadSize));
+  const [timerSecondsDraft, setTimerSecondsDraft] = useState(String(timerSeconds));
   const [purseDrafts, setPurseDrafts] = useState<Record<string, string>>(
     Object.fromEntries(teams.map((team) => [team.id, formatAmountInput(team.purseRemaining)])),
   );
@@ -72,6 +76,10 @@ export function ReadinessPanel({
   useEffect(() => {
     setSquadSizeDraft(String(squadSize));
   }, [squadSize]);
+
+  useEffect(() => {
+    setTimerSecondsDraft(String(timerSeconds));
+  }, [timerSeconds]);
 
   useEffect(() => {
     setPurseDrafts(
@@ -173,6 +181,32 @@ export function ReadinessPanel({
     }
   }
 
+  async function updateTimerSeconds() {
+    setPendingTimerSeconds(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/rooms/${roomCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timerSeconds: Number(timerSecondsDraft),
+        }),
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to update bid timer.");
+      }
+
+      router.refresh();
+    } catch (updateError) {
+      setError(toErrorMessage(updateError));
+    } finally {
+      setPendingTimerSeconds(false);
+    }
+  }
+
   function renderPlayerRow(player: Player, showSaleDetails = false) {
     const soldTeam = teams.find((team) => team.id === player.currentTeamId);
 
@@ -251,35 +285,77 @@ export function ReadinessPanel({
             borderColor: "rgba(99,102,241,0.16)",
           }}
         >
-          <div style={{ display: "grid", gap: "0.45rem" }}>
-            <div style={{ fontWeight: 700 }}>Room squad size</div>
-            <div className="subtle" style={{ fontSize: "0.8rem" }}>
-              Update the squad limit for the room and sync all teams together.
-            </div>
+          <div style={{ display: "grid", gap: "0.9rem" }}>
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 1fr) auto",
-                gap: "0.55rem",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "0.9rem",
               }}
             >
-              <input
-                className="input"
-                disabled={pendingSquadSize || phase === "LIVE" || phase === "PAUSED"}
-                min={1}
-                max={40}
-                onChange={(event) => setSquadSizeDraft(event.target.value)}
-                type="number"
-                value={squadSizeDraft}
-              />
-              <button
-                className="button ghost"
-                disabled={pendingSquadSize || phase === "LIVE" || phase === "PAUSED"}
-                onClick={() => void updateSquadSize()}
-                type="button"
-              >
-                {pendingSquadSize ? "Saving..." : "Save limit"}
-              </button>
+              <div style={{ display: "grid", gap: "0.45rem" }}>
+                <div style={{ fontWeight: 700 }}>Room squad size</div>
+                <div className="subtle" style={{ fontSize: "0.8rem" }}>
+                  Update the squad limit for the room and sync all teams together.
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
+                    gap: "0.55rem",
+                  }}
+                >
+                  <input
+                    className="input"
+                    disabled={pendingSquadSize || phase === "LIVE" || phase === "PAUSED"}
+                    min={1}
+                    max={40}
+                    onChange={(event) => setSquadSizeDraft(event.target.value)}
+                    type="number"
+                    value={squadSizeDraft}
+                  />
+                  <button
+                    className="button ghost"
+                    disabled={pendingSquadSize || phase === "LIVE" || phase === "PAUSED"}
+                    onClick={() => void updateSquadSize()}
+                    type="button"
+                  >
+                    {pendingSquadSize ? "Saving..." : "Save limit"}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: "0.45rem" }}>
+                <div style={{ fontWeight: 700 }}>Bid timer</div>
+                <div className="subtle" style={{ fontSize: "0.8rem" }}>
+                  Change the bid countdown for the room in seconds.
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) auto",
+                    gap: "0.55rem",
+                  }}
+                >
+                  <input
+                    className="input"
+                    disabled={pendingTimerSeconds || phase === "LIVE" || phase === "PAUSED"}
+                    min={5}
+                    max={180}
+                    onChange={(event) => setTimerSecondsDraft(event.target.value)}
+                    type="number"
+                    value={timerSecondsDraft}
+                  />
+                  <button
+                    className="button ghost"
+                    disabled={pendingTimerSeconds || phase === "LIVE" || phase === "PAUSED"}
+                    onClick={() => void updateTimerSeconds()}
+                    type="button"
+                  >
+                    {pendingTimerSeconds ? "Saving..." : "Save timer"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

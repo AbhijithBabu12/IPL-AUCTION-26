@@ -17,8 +17,8 @@ const bodyFont = Inter({
 
 
 export const metadata: Metadata = {
-  title: "SFL Auction Platform",
-  description: "Real-time SFL fantasy auction simulator with bidding, trades, and scoring.",
+  title: "SFL | St. Thomas Fantasy League",
+  description: "A live fantasy IPL auction game for building teams, running rooms, and tracking results.",
 };
 
 export default function RootLayout({
@@ -35,4 +35,3 @@ export default function RootLayout({
     </html>
   );
 }
-

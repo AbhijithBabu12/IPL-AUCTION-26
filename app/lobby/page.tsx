@@ -25,9 +25,7 @@ export default async function LobbyPage() {
           </div>
         </div>
         <div className="notice warning">
-          Add <span className="mono">SUPABASE_SERVICE_ROLE_KEY</span> to{" "}
-          <span className="mono">.env.local</span> before using room creation,
-          uploads, bidding, and results pages.
+          The lobby is not ready yet. Finish the remaining setup to create and manage rooms.
         </div>
       </main>
     );
@@ -47,14 +45,10 @@ export default async function LobbyPage() {
           </div>
         </div>
         <div className="notice warning">
-          Supabase auth is working, but the IPL schema is not installed in this
-          project yet.
+          The lobby setup is incomplete right now.
         </div>
         <div className="notice warning" style={{ marginTop: "1rem" }}>
-          Run <span className="mono">supabase/migrations/001_initial_schema.sql</span>
-          {" "}
-          in the Supabase SQL editor for this project before using lobby and room
-          features.
+          Finish the database setup before using rooms, auctions, and results.
           {schemaStatus.missingTable ? (
             <>
               {" "}
@@ -91,9 +85,7 @@ export default async function LobbyPage() {
 
       {!hasBrowserSupabaseEnv || !hasServiceRoleEnv ? (
         <div className="notice warning">
-          Supabase env is incomplete. Create <span className="mono">.env.local</span>
-          {" "}
-          from the example file before using room features.
+          Some room features are still being prepared.
         </div>
       ) : null}
 
@@ -101,8 +93,7 @@ export default async function LobbyPage() {
         <div className="panel">
           <h2>Create a room</h2>
           <p className="subtle">
-            Start a private auction room with its own purse, squad cap, timer,
-            and fixed increment rules.
+            Start a private SFL room with its own purse, squad size, timer, and auction settings.
           </p>
           <CreateRoomForm />
         </div>
@@ -110,8 +101,7 @@ export default async function LobbyPage() {
         <div className="panel">
           <h2>Join by code</h2>
           <p className="subtle">
-            Players can jump into an existing room with a short code and default
-            player permissions.
+            Enter a room code and join the auction with your group.
           </p>
           <JoinRoomForm />
         </div>
@@ -121,7 +111,7 @@ export default async function LobbyPage() {
         <h2>Your rooms</h2>
         {snapshot.rooms.length === 0 ? (
           <div className="empty-state">
-            No rooms yet. Create one above or join with a shared code.
+            No rooms yet. Create one above or join a room with a code.
           </div>
         ) : (
           <div className="card-list">

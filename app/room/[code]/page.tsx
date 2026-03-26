@@ -31,9 +31,9 @@ export default async function RoomPage({
     return (
       <main className="shell">
         <div className="panel">
-          <h1 className="page-title">Configuration required</h1>
+          <h1 className="page-title">Room setup is not ready</h1>
           <p className="subtle">
-            Add the Supabase service role key before opening room management pages.
+            Finish the remaining setup before opening room controls.
           </p>
           <Link className="button" href="/lobby">
             Back to lobby
@@ -49,10 +49,9 @@ export default async function RoomPage({
     return (
       <main className="shell">
         <div className="panel">
-          <h1 className="page-title">Room access required</h1>
+          <h1 className="page-title">Join this room first</h1>
           <p className="subtle">
-            Join this room from the lobby first so the platform can attach your
-            role and permissions.
+            Enter this room from the lobby first so your access is ready.
           </p>
           <Link className="button" href="/lobby">
             Back to lobby
@@ -109,9 +108,9 @@ export default async function RoomPage({
       <section className="panel">
         <div className="header-row">
           <div>
-            <span className="eyebrow">Room control</span>
+            <span className="eyebrow">Room setup</span>
             <h1 className="page-title" style={{ fontSize: "3.2rem", marginTop: "0.4rem" }}>
-              Setup and launch
+              Get the room ready
             </h1>
           </div>
           <div className="pill-row">
@@ -166,10 +165,9 @@ export default async function RoomPage({
           {snapshot.currentMember.isAdmin ? (
             <>
               <div className="panel">
-                <h2>Roster upload</h2>
+                <h2>Player list</h2>
                 <p className="subtle">
-                  Load the built-in master player pool or upload a refreshed CSV/XLSX
-                  sheet for this room.
+                  Add players for this room from the default list or upload your own sheet.
                 </p>
                 <UploadPlayersForm
                   defaultPlayerCount={defaultPlayerPoolCount}
@@ -219,12 +217,12 @@ export default async function RoomPage({
                       </details>
                     );
                   }
-                  return (
-                    <div className="subtle" style={{ fontSize: "0.9rem" }}>
-                      You haven't been assigned a team as admin yet. Use the Team ownership panel below to assign yourself a team.
-                    </div>
-                  );
-                })()}
+                return (
+                  <div className="subtle" style={{ fontSize: "0.9rem" }}>
+                      You do not have a team yet. Assign one below to see your squad here.
+                  </div>
+                );
+              })()}
               </div>
             </>
           ) : (
@@ -264,7 +262,7 @@ export default async function RoomPage({
                 return (
                   <>
                     <p className="subtle">
-                      You don't own a team in this room yet. Configure your team below.
+                      You do not have a team in this room yet. Create one below to get started.
                     </p>
                     <SelfCreateTeamForm roomCode={snapshot.room.code} />
                   </>
@@ -284,6 +282,7 @@ export default async function RoomPage({
               players={snapshot.players}
               roomCode={snapshot.room.code}
               squadSize={snapshot.room.squadSize}
+              timerSeconds={snapshot.room.timerSeconds}
               teams={snapshot.teams}
             />
             {snapshot.currentMember.isAdmin &&
@@ -291,7 +290,7 @@ export default async function RoomPage({
               <div style={{ marginTop: "1rem" }}>
                 {snapshot.members.length === 1 ? (
                   <div className="notice" style={{ marginBottom: "0.75rem" }}>
-                    Running solo â€” you control all teams. No other participants needed.
+                    Solo mode is ready. You can control all teams yourself.
                   </div>
                 ) : null}
                 <StartAuctionButton
@@ -301,11 +300,11 @@ export default async function RoomPage({
               </div>
             ) : snapshot.auctionState?.phase !== "WAITING" ? (
               <div className="notice" style={{ marginTop: "1rem" }}>
-                Auction is already {snapshot.auctionState?.phase.toLowerCase()}.
+                The auction is already {snapshot.auctionState?.phase.toLowerCase()}.
               </div>
             ) : (
               <div className="notice" style={{ marginTop: "1rem" }}>
-                An admin needs to start the auction once players and teams are ready.
+                An admin can start the auction once the room is ready.
               </div>
             )}
           </div>
@@ -326,11 +325,9 @@ export default async function RoomPage({
 
       {snapshot.currentMember.isAdmin && (
         <section className="panel" style={{ marginTop: "1rem", borderColor: "rgba(183,121,31,0.3)", background: "rgba(183,121,31,0.04)" }}>
-          <h2 style={{ marginTop: 0 }}>Import completed auction results</h2>
+          <h2 style={{ marginTop: 0 }}>Import past results</h2>
           <p className="subtle" style={{ marginBottom: "1rem" }}>
-            Already ran your auction elsewhere? Upload the results workbook to populate
-            teams, players, and squads in one step. All existing room data will be replaced
-            and the auction will be marked complete.
+            Upload a completed auction sheet to fill teams, players, and squads in one step.
           </p>
           <ImportResultsForm roomCode={snapshot.room.code} />
         </section>
@@ -366,7 +363,7 @@ export default async function RoomPage({
         <section className="panel" style={{ marginTop: "1rem" }}>
           <h2 style={{ marginBottom: "0.2rem" }}>Player Trading</h2>
           <p className="subtle" style={{ marginBottom: "1.25rem" }}>
-            Propose or accept player transfers. The auction does not need to be active.
+            Propose and accept player swaps between teams.
           </p>
           <TradePanel
             currentUserId={snapshot.currentMember.userId}

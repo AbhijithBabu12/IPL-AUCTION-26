@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { AppError } from "@/lib/domain/errors";
-import { roomSquadSizeSchema } from "@/lib/domain/schemas";
+import { roomSettingsSchema } from "@/lib/domain/schemas";
 import { handleRouteError } from "@/lib/server/api";
 import { requireApiUser } from "@/lib/server/auth";
 import { getAuctionStateOnly, requireRoomMember } from "@/lib/server/room";
@@ -31,31 +31,44 @@ export async function PATCH(
     }
 
     const rawBody = await request.json();
-    const input = roomSquadSizeSchema.parse(rawBody);
+    const input = roomSettingsSchema.parse(rawBody);
     const admin = getSupabaseAdminClient();
+
+    const roomUpdates: Record<string, number> = {};
+    if (input.squadSize !== undefined) {
+      roomUpdates.squad_size = input.squadSize;
+    }
+    if (input.timerSeconds !== undefined) {
+      roomUpdates.timer_seconds = input.timerSeconds;
+    }
 
     const { error: roomError } = await admin
       .from("rooms")
-      .update({ squad_size: input.squadSize })
+      .update(roomUpdates)
       .eq("id", room.id);
 
     if (roomError) {
       throw new AppError(roomError.message, 500, "ROOM_UPDATE_FAILED");
     }
 
-    const { error: teamError } = await admin
-      .from("teams")
-      .update({ squad_limit: input.squadSize })
-      .eq("room_id", room.id);
+    if (input.squadSize !== undefined) {
+      const { error: teamError } = await admin
+        .from("teams")
+        .update({ squad_limit: input.squadSize })
+        .eq("room_id", room.id);
 
-    if (teamError) {
-      throw new AppError(teamError.message, 500, "TEAM_UPDATE_FAILED");
+      if (teamError) {
+        throw new AppError(teamError.message, 500, "TEAM_UPDATE_FAILED");
+      }
     }
 
     revalidatePath(`/room/${room.code}`);
     revalidatePath(`/auction/${room.code}`);
 
-    return NextResponse.json({ squadSize: input.squadSize });
+    return NextResponse.json({
+      squadSize: input.squadSize ?? room.squadSize,
+      timerSeconds: input.timerSeconds ?? room.timerSeconds,
+    });
   } catch (error) {
     return handleRouteError(error);
   }

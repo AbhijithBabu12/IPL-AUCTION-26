@@ -27,7 +27,7 @@ export default function Loading() {
         <div className="sfl-loader-text">
           <div className="sfl-loader-wordmark">SFL</div>
           <div className="sfl-loader-subtitle">St. Thomas Fantasy League</div>
-          <div className="sfl-loader-caption">Fantasy auction platform</div>
+          <div className="sfl-loader-caption">Loading your room...</div>
         </div>
       </div>
     </main>
