@@ -27,50 +27,29 @@ export function SoldPlayerShowcase({
     [items],
   );
   const [selectedId, setSelectedId] = useState<string | null>(orderedItems[0]?.id ?? null);
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
-  const autoScrollRef = useRef<number | null>(null);
-  const pauseUntilRef = useRef(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const resumeTimerRef = useRef<number | null>(null);
 
   const selectedItem =
     orderedItems.find((item) => item.id === selectedId) ?? orderedItems[0] ?? null;
   const renderedItems = useMemo(() => [...orderedItems, ...orderedItems], [orderedItems]);
 
   useEffect(() => {
-    const node = scrollerRef.current;
-    if (!node || orderedItems.length < 2) return;
-
-    const resetToStart = () => {
-      node.scrollLeft = 0;
-    };
-
-    resetToStart();
-
-    const step = () => {
-      const segmentWidth = node.scrollWidth / 2;
-      if (Date.now() >= pauseUntilRef.current) {
-        node.scrollLeft += variant === "ticker" ? 0.35 : 0.25;
-      }
-
-      if (node.scrollLeft >= segmentWidth) {
-        node.scrollLeft -= segmentWidth;
-      } else if (node.scrollLeft <= 0 && Date.now() < pauseUntilRef.current) {
-        node.scrollLeft = segmentWidth;
-      }
-
-      autoScrollRef.current = window.requestAnimationFrame(step);
-    };
-
-    autoScrollRef.current = window.requestAnimationFrame(step);
-
     return () => {
-      if (autoScrollRef.current !== null) {
-        window.cancelAnimationFrame(autoScrollRef.current);
+      if (resumeTimerRef.current !== null) {
+        window.clearTimeout(resumeTimerRef.current);
       }
     };
-  }, [orderedItems, variant]);
+  }, []);
 
   function pauseAutoScroll() {
-    pauseUntilRef.current = Date.now() + 2500;
+    setIsPaused(true);
+    if (resumeTimerRef.current !== null) {
+      window.clearTimeout(resumeTimerRef.current);
+    }
+    resumeTimerRef.current = window.setTimeout(() => {
+      setIsPaused(false);
+    }, 2200);
   }
 
   if (orderedItems.length === 0) {
@@ -90,12 +69,11 @@ export function SoldPlayerShowcase({
 
       <div className="sold-showcase-slider">
         <div
-          className="sold-showcase-scroller"
-          onMouseEnter={pauseAutoScroll}
+          className={`sold-showcase-marquee${isPaused ? " paused" : ""}`}
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
           onPointerDown={pauseAutoScroll}
-          onScroll={pauseAutoScroll}
           onTouchStart={pauseAutoScroll}
-          ref={scrollerRef}
         >
           <div className="sold-showcase-track">
             {renderedItems.map((item, index) => (
