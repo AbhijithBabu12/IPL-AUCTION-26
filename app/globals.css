@@ -1419,7 +1419,21 @@ html {
   .auction-body    { padding: 0.75rem 0.6rem; }
   .auction-bottom-bar { padding: 0.5rem 0.75rem; gap: 0.35rem; flex-wrap: wrap; }
   .bid-button-lg   { font-size: 0.85rem; min-height: 46px; }
-  .my-team-chip    { display: none; }
+  .my-team-chip {
+    display: inline-flex;
+    width: 100%;
+    justify-content: flex-start;
+    font-size: 0.78rem;
+    padding: 0.35rem 0.75rem 0.35rem 0.4rem;
+  }
+  .my-team-chip-avatar {
+    width: 20px;
+    height: 20px;
+    font-size: 0.58rem;
+  }
+  .my-team-chip-purse {
+    padding-left: 0.45rem;
+  }
 
   /* Topbar left-side pill group â€” allow wrapping */
   .auction-topbar > div:first-child {
