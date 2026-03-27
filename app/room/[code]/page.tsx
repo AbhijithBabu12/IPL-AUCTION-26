@@ -172,7 +172,6 @@ export default async function RoomPage({
                 <UploadPlayersForm
                   defaultPlayerCount={defaultPlayerPoolCount}
                   roomCode={snapshot.room.code}
-                  teams={snapshot.teams}
                 />
               </div>
 
@@ -287,7 +286,9 @@ export default async function RoomPage({
               teams={snapshot.teams}
             />
             {snapshot.currentMember.isAdmin &&
-            (snapshot.auctionState?.phase ?? "WAITING") === "WAITING" ? (
+            ["WAITING", "ROUND_END", "COMPLETED"].includes(
+              snapshot.auctionState?.phase ?? "WAITING",
+            ) ? (
               <div style={{ marginTop: "1rem" }}>
                 {snapshot.members.length === 1 ? (
                   <div className="notice" style={{ marginBottom: "0.75rem" }}>
@@ -296,6 +297,11 @@ export default async function RoomPage({
                 ) : null}
                 <StartAuctionButton
                   disabled={snapshot.players.length === 0 || snapshot.teams.length === 0}
+                  label={
+                    (snapshot.auctionState?.phase ?? "WAITING") === "WAITING"
+                      ? "Start auction"
+                      : "Start auction again"
+                  }
                   roomCode={snapshot.room.code}
                 />
               </div>

@@ -5,8 +5,14 @@ import { useState } from "react";
 import type { ChangeEvent } from "react";
 import * as XLSX from "xlsx";
 
-import type { Team } from "@/lib/domain/types";
-import { toErrorMessage } from "@/lib/utils";
+import { parseAmountInput, toErrorMessage } from "@/lib/utils";
+
+const ROLE_OPTIONS = [
+  "Batsman",
+  "Bowler",
+  "All-Rounder",
+  "Wicketkeeper",
+];
 
 async function readTabularRows(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase();
@@ -93,11 +99,9 @@ function normalizePlayers(rows: Record<string, unknown>[]) {
 export function UploadPlayersForm({
   roomCode,
   defaultPlayerCount,
-  teams,
 }: {
   roomCode: string;
   defaultPlayerCount: number;
-  teams: Team[];
 }) {
   const [pendingAction, setPendingAction] = useState<"upload" | "default" | "manual" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -106,7 +110,7 @@ export function UploadPlayersForm({
     name: "",
     role: "",
     basePrice: "",
-    currentTeamId: "",
+    teamName: "",
   });
 
   const pending = pendingAction !== null;
@@ -150,21 +154,24 @@ export function UploadPlayersForm({
     setError(null);
 
     try {
+      const parsedBasePrice = parseAmountInput(manualPlayer.basePrice);
       await importPlayers([
         {
           name: manualPlayer.name.trim(),
           role: manualPlayer.role.trim(),
           nationality: null,
-          basePrice: Number(manualPlayer.basePrice),
-          stats: null,
-          currentTeamId: manualPlayer.currentTeamId || null,
+          basePrice: parsedBasePrice,
+          stats: manualPlayer.teamName.trim()
+            ? { iplTeam: manualPlayer.teamName.trim() }
+            : null,
+          currentTeamId: null,
         },
       ]);
       setManualPlayer({
         name: "",
         role: "",
         basePrice: "",
-        currentTeamId: "",
+        teamName: "",
       });
     } catch (manualError) {
       setError(toErrorMessage(manualError));
@@ -236,7 +243,7 @@ export function UploadPlayersForm({
           <div>
             <h3 style={{ margin: 0 }}>Add player manually</h3>
             <p className="subtle" style={{ margin: "0.3rem 0 0" }}>
-              Add one player directly. If you choose a current team, the player will be added as already sold to that team.
+              Add one player directly into the available auction list.
             </p>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.65rem" }}>
@@ -250,42 +257,41 @@ export function UploadPlayersForm({
               type="text"
               value={manualPlayer.name}
             />
-            <input
-              className="input"
-              disabled={pending}
-              onChange={(event) =>
-                setManualPlayer((current) => ({ ...current, role: event.target.value }))
-              }
-              placeholder="Role"
-              type="text"
-              value={manualPlayer.role}
-            />
-            <input
-              className="input"
-              disabled={pending}
-              min="0"
-              onChange={(event) =>
-                setManualPlayer((current) => ({ ...current, basePrice: event.target.value }))
-              }
-              placeholder="Price"
-              type="number"
-              value={manualPlayer.basePrice}
-            />
             <select
               className="select"
               disabled={pending}
               onChange={(event) =>
-                setManualPlayer((current) => ({ ...current, currentTeamId: event.target.value }))
+                setManualPlayer((current) => ({ ...current, role: event.target.value }))
               }
-              value={manualPlayer.currentTeamId}
+              value={manualPlayer.role}
             >
-              <option value="">No current team</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.shortCode} - {team.name}
+              <option value="">Select role</option>
+              {ROLE_OPTIONS.map((role) => (
+                <option key={role} value={role}>
+                  {role}
                 </option>
               ))}
             </select>
+            <input
+              className="input"
+              disabled={pending}
+              onChange={(event) =>
+                setManualPlayer((current) => ({ ...current, basePrice: event.target.value }))
+              }
+              placeholder="Base price like 25L, 1Cr, 500K"
+              type="text"
+              value={manualPlayer.basePrice}
+            />
+            <input
+              className="input"
+              disabled={pending}
+              onChange={(event) =>
+                setManualPlayer((current) => ({ ...current, teamName: event.target.value }))
+              }
+              placeholder="Current cricket team (optional)"
+              type="text"
+              value={manualPlayer.teamName}
+            />
           </div>
           <button
             className="button"
@@ -314,8 +320,7 @@ export function UploadPlayersForm({
         <span className="mono">Player</span>, <span className="mono">role</span> or{" "}
         <span className="mono">Role</span>, optional{" "}
         <span className="mono">nationality</span>, and optional{" "}
-        <span className="mono">basePrice</span>. You can also include an optional{" "}
-        <span className="mono">currentTeamId</span> to add a player as already sold. If pricing is missing, the room
+        <span className="mono">basePrice</span>. If pricing is missing, the room
         bid increment becomes the opening bid. Columns like{" "}
         <span className="mono">IPL Team</span> are preserved in player stats.
       </div>
