@@ -1,19 +1,59 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  AuctionChatPanel,
+  type AuctionChatMessage,
+} from "@/components/auction/auction-chat-panel";
 import { BidPanel } from "@/components/auction/bid-panel";
-import { EmojiReactions } from "@/components/auction/emoji-reactions";
 import { SquadBoard } from "@/components/auction/squad-board";
 import { TimerBar } from "@/components/auction/timer-bar";
+import { SoldPlayerShowcase } from "@/components/sold-player-showcase";
 import { TradePanel } from "@/components/trades/trade-panel";
 import { hasBrowserSupabaseEnv } from "@/lib/config";
 import { getAllowedIncrements } from "@/lib/domain/auction";
 import { ROOM_EVENTS, getRoomChannelName } from "@/lib/domain/realtime";
-import type { AuctionSnapshot, EmojiReaction } from "@/lib/domain/types";
+import type { AuctionSnapshot } from "@/lib/domain/types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatCurrencyShort, formatIncrement, toErrorMessage } from "@/lib/utils";
+
+type BidPlacedPayload = {
+  playerId: string;
+  teamId: string;
+  amount: number;
+  expiresAt: string;
+  version: number;
+};
+
+type SkipVotePayload = {
+  teamId: string;
+  version: number;
+};
+
+type AdvancePayload = {
+  phase: string;
+  round: number;
+  playerId: string | null;
+  previousPlayerId: string | null;
+  previousPlayerStatus: "SOLD" | "UNSOLD" | null;
+  winningTeamId: string | null;
+  winningBid: number | null;
+  expiresAt: string | null;
+  version: number;
+};
+
+type ChatMessagePayload = {
+  id: string;
+  kind: "text" | "emoji";
+  userId: string | null;
+  userName: string;
+  userTag?: string | null;
+  text: string;
+  sentAt: string;
+};
 
 function getRemainingSeconds(expiresAt: string | null) {
   if (!expiresAt) return 0;
@@ -34,8 +74,15 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   const channelRef = useRef<any>(null);
   const autoAdvanceKey = useRef<string | null>(null);
   const prevPlayerIdRef = useRef<string | null>(snapshot.auctionState.currentPlayerId);
+  const [localAuctionState, setLocalAuctionState] = useState(snapshot.auctionState);
+  const [localPlayers, setLocalPlayers] = useState(snapshot.players);
+  const localPlayersRef = useRef(snapshot.players);
+  const [localTeams, setLocalTeams] = useState(snapshot.teams);
+  const localTeamsRef = useRef(snapshot.teams);
+  const [localSquads, setLocalSquads] = useState(snapshot.squads);
+  const [localBids, setLocalBids] = useState(snapshot.bids);
 
-  const [recentReactions, setRecentReactions] = useState<EmojiReaction[]>([]);
+  const [chatMessages, setChatMessages] = useState<AuctionChatMessage[]>([]);
   const [remainingSeconds, setRemainingSeconds] = useState(
     getRemainingSeconds(snapshot.auctionState.expiresAt),
   );
@@ -43,47 +90,57 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   const [pausePending, setPausePending] = useState(false);
   const [resumePending, setResumePending] = useState(false);
   const [advancePending, setAdvancePending] = useState(false);
+  const [endRoundPending, setEndRoundPending] = useState(false);
   const [optimisticPhase, setOptimisticPhase] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [squadOpen, setSquadOpen] = useState(false);
+  const [endRoundConfirmOpen, setEndRoundConfirmOpen] = useState(false);
   const [resultOverlay, setResultOverlay] = useState<{
     kind: "SOLD" | "UNSOLD";
     playerName: string;
+    teamName?: string;
+    price?: number;
   } | null>(null);
 
   // Player-side bid state (used in bottom bar)
   const [bidTeamId, setBidTeamId] = useState(() => snapshot.teams[0]?.id ?? "");
   const [bidPending, setBidPending] = useState(false);
-  const [skipPending, setSkipPending] = useState(false);
   const [bidError, setBidError] = useState<string | null>(null);
 
-  // ROUND_END — player picker for next round
+  // ROUND_END â€” player picker for next round
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [nextRoundPending, setNextRoundPending] = useState(false);
 
   const currentPlayer =
-    snapshot.players.find((p) => p.id === snapshot.auctionState.currentPlayerId) ?? null;
+    localPlayers.find((p) => p.id === localAuctionState.currentPlayerId) ?? null;
   const currentTeam =
-    snapshot.teams.find((t) => t.id === snapshot.auctionState.currentTeamId) ?? null;
-
-  const effectivePhase = optimisticPhase ?? snapshot.auctionState.phase;
+    localTeams.find((t) => t.id === localAuctionState.currentTeamId) ?? null;
+  const effectivePhase = optimisticPhase ?? localAuctionState.phase;
   const isAdmin = Boolean(snapshot.currentMember?.isAdmin);
   const isLive = effectivePhase === "LIVE";
   const isPaused = effectivePhase === "PAUSED";
-  const currentBid = snapshot.auctionState.currentBid;
+  const isBiddingOpen = isLive && remainingSeconds > 0;
+  const currentBid = localAuctionState.currentBid;
   const allowedIncrements = getAllowedIncrements(currentBid);
   const isFirstBid = currentBid === null;
 
-  const selectedTeam = snapshot.teams.find((t) => t.id === bidTeamId) ?? null;
-  const isLeading = selectedTeam?.id === snapshot.auctionState.currentTeamId;
-  const hasSkipVoted = selectedTeam
-    ? snapshot.auctionState.skipVoteTeamIds.includes(selectedTeam.id)
-    : false;
+  const selectedTeam = localTeams.find((t) => t.id === bidTeamId) ?? null;
+  const isLeading = selectedTeam?.id === localAuctionState.currentTeamId;
+  const myOwnedTeam = localTeams.find((team) => team.ownerUserId === snapshot.user?.id) ?? null;
+  const showPlayerBidBar = !isAdmin || Boolean(myOwnedTeam);
+  const bidBarTeams = myOwnedTeam ? [myOwnedTeam] : localTeams;
 
-  const soldCount = snapshot.players.filter((p) => p.status === "SOLD").length;
-  const unsoldCount = snapshot.players.filter((p) => p.status === "UNSOLD").length;
-  const hasAvailablePlayers = snapshot.players.some((p) => p.status === "AVAILABLE");
-  const skipVoteCount = snapshot.auctionState.skipVoteTeamIds.length;
-
+  const soldCount = localPlayers.filter((p) => p.status === "SOLD").length;
+  const unsoldCount = localPlayers.filter((p) => p.status === "UNSOLD").length;
+  const hasAvailablePlayers = localPlayers.some((p) => p.status === "AVAILABLE");
+  const auctionPoolPlayers = localPlayers
+    .filter(
+      (player) =>
+        player.status === "AVAILABLE" ||
+        player.id === localAuctionState.currentPlayerId,
+    )
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name));
   const franchise =
     (currentPlayer?.stats?.["franchise"] as string | undefined) ??
     (currentPlayer?.stats?.["team"] as string | undefined) ??
@@ -94,46 +151,60 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     ? `role-${currentPlayer.role.toUpperCase().replace(/[\s/]+/g, "-")}`
     : "";
 
+  useEffect(() => {
+    setLocalAuctionState(snapshot.auctionState);
+    setLocalPlayers(snapshot.players);
+    localPlayersRef.current = snapshot.players;
+    setLocalTeams(snapshot.teams);
+    localTeamsRef.current = snapshot.teams;
+    setLocalSquads(snapshot.squads);
+    setLocalBids(snapshot.bids);
+  }, [snapshot]);
+
+  useEffect(() => {
+    if (myOwnedTeam && bidTeamId !== myOwnedTeam.id) {
+      setBidTeamId(myOwnedTeam.id);
+      return;
+    }
+
+    if (!myOwnedTeam && !localTeams.some((team) => team.id === bidTeamId)) {
+      setBidTeamId(localTeams[0]?.id ?? "");
+    }
+  }, [bidTeamId, localTeams, myOwnedTeam]);
+
   // Reset optimistic phase when server confirms update
   useEffect(() => {
     setOptimisticPhase(null);
   }, [snapshot.auctionState.version]);
 
-  // SOLD/UNSOLD overlay — fires when current player changes
-  useEffect(() => {
-    const prevId = prevPlayerIdRef.current;
-    const newId = snapshot.auctionState.currentPlayerId;
-    prevPlayerIdRef.current = newId;
-
-    if (!prevId || prevId === newId) return;
-
-    const oldPlayer = snapshot.players.find((p) => p.id === prevId);
-    if (oldPlayer?.status !== "SOLD" && oldPlayer?.status !== "UNSOLD") return;
-
-    setResultOverlay({ kind: oldPlayer.status, playerName: oldPlayer.name });
-    const t = setTimeout(() => setResultOverlay(null), 2500);
-    return () => clearTimeout(t);
-  }, [snapshot.auctionState.currentPlayerId, snapshot.players]);
 
   const routerRef = useRef(router);
   routerRef.current = router;
+  const refreshTimeoutRef = useRef<number | null>(null);
+
   const refreshRoom = useCallback(() => {
-    routerRef.current.refresh();
+    if (refreshTimeoutRef.current !== null) return;
+    refreshTimeoutRef.current = window.setTimeout(() => {
+      startTransition(() => {
+        routerRef.current.refresh();
+      });
+      refreshTimeoutRef.current = null;
+    }, 75);
   }, []);
 
-  // Timer — stops immediately when optimistic phase is PAUSED
+  // Timer â€” stops immediately when optimistic phase is PAUSED
   useEffect(() => {
-    setRemainingSeconds(getRemainingSeconds(snapshot.auctionState.expiresAt));
+    setRemainingSeconds(getRemainingSeconds(localAuctionState.expiresAt));
 
-    const phase = optimisticPhase ?? snapshot.auctionState.phase;
-    if (phase !== "LIVE" || !snapshot.auctionState.expiresAt) return;
+    const phase = optimisticPhase ?? localAuctionState.phase;
+    if (phase !== "LIVE" || !localAuctionState.expiresAt) return;
 
     const interval = window.setInterval(() => {
-      setRemainingSeconds(getRemainingSeconds(snapshot.auctionState.expiresAt));
+      setRemainingSeconds(getRemainingSeconds(localAuctionState.expiresAt));
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [snapshot.auctionState.expiresAt, snapshot.auctionState.phase, optimisticPhase]);
+  }, [localAuctionState.expiresAt, localAuctionState.phase, optimisticPhase]);
 
   // Realtime subscription
   useEffect(() => {
@@ -141,7 +212,11 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
 
     const supabase = getSupabaseBrowserClient();
     const channel = supabase
-      .channel(getRoomChannelName(snapshot.room.code))
+      .channel(getRoomChannelName(snapshot.room.code), {
+        config: {
+          broadcast: { ack: true, self: true },
+        },
+      })
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "auction_state", filter: `room_id=eq.${snapshot.room.id}` },
@@ -172,10 +247,145 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         { event: "*", schema: "public", table: "trades", filter: `room_id=eq.${snapshot.room.id}` },
         () => refreshRoom(),
       )
-      .on("broadcast", { event: ROOM_EVENTS.emoji }, ({ payload }) => {
-        const reaction = payload as EmojiReaction;
-        setRecentReactions((curr) => [reaction, ...curr].slice(0, 12));
+      .on("broadcast", { event: ROOM_EVENTS.chatMessage }, ({ payload }) => {
+        const message = payload as ChatMessagePayload;
+        setChatMessages((curr) => {
+          if (curr.some((entry) => entry.id === message.id)) {
+            return curr;
+          }
+          return [
+            ...curr,
+            {
+              id: message.id,
+              kind: message.kind,
+              userName: message.userName,
+              userTag: message.userTag,
+              text: message.text,
+              sentAt: message.sentAt,
+              isOwn: message.userId !== null && message.userId === snapshot.user?.id,
+            },
+          ].slice(-50);
+        });
       })
+      .on("broadcast", { event: ROOM_EVENTS.newBid }, ({ payload }) => {
+        const next = payload as BidPlacedPayload;
+        setLocalAuctionState((curr) => ({
+          ...curr,
+          currentBid: next.amount,
+          currentTeamId: next.teamId,
+          expiresAt: next.expiresAt,
+          version: Math.max(curr.version + 1, next.version),
+          lastEvent: "NEW_BID",
+        }));
+        setLocalBids((curr) => [
+          {
+            id: `broadcast-bid-${next.version}-${next.teamId}`,
+            roomId: snapshot.room.id,
+            playerId: next.playerId,
+            teamId: next.teamId,
+            amount: next.amount,
+            createdAt: new Date().toISOString(),
+            createdBy: "broadcast",
+          },
+          ...curr.filter(
+            (item) =>
+              !(item.playerId === next.playerId && item.teamId === next.teamId && item.amount === next.amount),
+          ),
+        ]);
+        setRemainingSeconds(getRemainingSeconds(next.expiresAt));
+      })
+      .on("broadcast", { event: "SKIP_VOTED" }, ({ payload }) => {
+        const next = payload as SkipVotePayload;
+        setLocalAuctionState((curr) => {
+          if (curr.skipVoteTeamIds.includes(next.teamId)) return curr;
+          return {
+            ...curr,
+            skipVoteTeamIds: [...curr.skipVoteTeamIds, next.teamId],
+            version: Math.max(curr.version + 1, next.version),
+          };
+        });
+      })
+      .on("broadcast", { event: "AUCTION_ADVANCED" }, ({ payload }) => {
+        const next = payload as AdvancePayload;
+        if (next.previousPlayerId) {
+          setLocalPlayers((curr) =>
+            curr.map((player) =>
+              player.id === next.previousPlayerId
+                ? {
+                    ...player,
+                    status: next.previousPlayerStatus ?? player.status,
+                    currentTeamId:
+                      next.previousPlayerStatus === "SOLD" ? next.winningTeamId : null,
+                    soldPrice: next.previousPlayerStatus === "SOLD" ? next.winningBid : null,
+                  }
+                : player,
+            ),
+          );
+        }
+        if (
+          next.previousPlayerStatus === "SOLD" &&
+          next.winningTeamId &&
+          next.previousPlayerId &&
+          next.winningBid !== null
+        ) {
+          const winningTeamId = next.winningTeamId;
+          const previousPlayerId = next.previousPlayerId;
+          const winningBid = next.winningBid;
+          setLocalTeams((curr) =>
+            curr.map((team) =>
+              team.id === winningTeamId
+                ? { ...team, purseRemaining: team.purseRemaining - winningBid }
+                : team,
+            ),
+          );
+          setLocalSquads((curr) => [
+            {
+              id: `broadcast-squad-${next.version}-${previousPlayerId}`,
+              roomId: snapshot.room.id,
+              teamId: winningTeamId,
+              playerId: previousPlayerId,
+              purchasePrice: winningBid,
+              acquiredInRound: localAuctionState.currentRound,
+              createdAt: new Date().toISOString(),
+            },
+            ...curr.filter((item) => item.playerId !== previousPlayerId),
+          ]);
+        }
+        setLocalAuctionState((curr) => ({
+          ...curr,
+          phase: next.phase as typeof curr.phase,
+          currentRound: next.round,
+          currentPlayerId: next.playerId,
+          currentBid: null,
+          currentTeamId: null,
+          expiresAt: next.expiresAt,
+          pausedRemainingMs: null,
+          skipVoteTeamIds: [],
+          version: Math.max(curr.version + 1, next.version),
+        }));
+        setRemainingSeconds(getRemainingSeconds(next.expiresAt));
+
+        // Show SOLD/UNSOLD overlay directly from the broadcast payload â€”
+        // this is reliable for ALL clients, including members who didn't place the bid.
+        if (next.previousPlayerId && next.previousPlayerStatus) {
+          const prevPlayerName =
+            localPlayersRef.current.find((p) => p.id === next.previousPlayerId)?.name ??
+            "Player";
+          const winningTeamName = next.winningTeamId
+            ? localTeamsRef.current.find((t) => t.id === next.winningTeamId)?.name
+            : undefined;
+          setResultOverlay({
+            kind: next.previousPlayerStatus,
+            playerName: prevPlayerName,
+            teamName: next.previousPlayerStatus === "SOLD" ? winningTeamName : undefined,
+            price: next.previousPlayerStatus === "SOLD" && next.winningBid !== null ? next.winningBid : undefined,
+          });
+          const overlayTimer = window.setTimeout(() => setResultOverlay(null), 2500);
+          // cleanup is handled by the component unmount; this is fire-and-forget
+          void overlayTimer;
+        }
+      })
+      .on("broadcast", { event: "REFRESH_ROOM" }, () => refreshRoom())
       .subscribe();
 
     channelRef.current = channel;
@@ -186,26 +396,17 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     };
   }, [refreshRoom, snapshot.room.code, snapshot.room.id]);
 
-  // Auto-advance (admin only, fires when timer reaches 0)
+  // timer advance was removed to prevent clock drift auto-locking. Admin manually clicks Sell/Next.
+
+  // Auto-select players for Round 1 to simplify admin start
   useEffect(() => {
-    const shouldAutoAdvance =
-      remainingSeconds === 0 &&
-      snapshot.auctionState.phase === "LIVE" &&
-      Boolean(snapshot.currentMember?.isAdmin);
-
-    if (!shouldAutoAdvance) return;
-
-    const key = `${snapshot.auctionState.version}:${snapshot.auctionState.currentPlayerId}`;
-    if (autoAdvanceKey.current === key) return;
-    autoAdvanceKey.current = key;
-    void runAdvance();
-  }, [
-    remainingSeconds,
-    snapshot.auctionState.currentPlayerId,
-    snapshot.auctionState.phase,
-    snapshot.auctionState.version,
-    snapshot.currentMember?.isAdmin,
-  ]);
+    if (effectivePhase === "ROUND_END" && localAuctionState.currentRound === 0 && selectedPlayerIds.length === 0) {
+      const unsold = localPlayers.filter(p => p.status === "UNSOLD").map(p => p.id);
+      if (unsold.length > 0) {
+        setSelectedPlayerIds(unsold);
+      }
+    }
+  }, [effectivePhase, localAuctionState.currentRound, localPlayers, selectedPlayerIds.length]);
 
   async function runControlAction(
     url: string,
@@ -217,12 +418,20 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     setActionError(null);
     try {
       const response = await fetch(url, { method: "POST" });
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        error?: string;
+        phase?: string;
+        round?: number;
+        playerId?: string | null;
+      };
       if (!response.ok) {
         setOptimisticPhase(null);
         throw new Error(payload.error ?? "Auction action failed.");
       }
-      router.refresh();
+      refreshRoom();
+      try {
+        channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
+      } catch (e) {}
     } catch (err) {
       setActionError(toErrorMessage(err));
     } finally {
@@ -238,21 +447,116 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         `/api/rooms/${snapshot.room.code}/auction/advance`,
         { method: "POST" },
       );
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        error?: string;
+        phase?: string;
+        round?: number;
+        playerId?: string | null;
+      };
       if (!response.ok) throw new Error(payload.error ?? "Auction action failed.");
-      router.refresh();
+      const resolvedAt = new Date().toISOString();
+      const optimisticExpiresAt =
+        payload.phase === "LIVE" && payload.playerId
+          ? new Date(Date.now() + snapshot.room.timerSeconds * 1000).toISOString()
+          : null;
+
+      if (currentPlayer) {
+        if (currentBid !== null && currentTeam) {
+          setLocalPlayers((curr) =>
+            curr.map((player) =>
+              player.id === currentPlayer.id
+                ? {
+                    ...player,
+                    status: "SOLD",
+                    currentTeamId: currentTeam.id,
+                    soldPrice: currentBid,
+                  }
+                : player,
+            ),
+          );
+          setLocalTeams((curr) =>
+            curr.map((team) =>
+              team.id === currentTeam.id
+                ? { ...team, purseRemaining: team.purseRemaining - currentBid }
+                : team,
+            ),
+          );
+          setLocalSquads((curr) => [
+            {
+              id: `optimistic-${currentPlayer.id}-${Date.now()}`,
+              roomId: snapshot.room.id,
+              teamId: currentTeam.id,
+              playerId: currentPlayer.id,
+              purchasePrice: currentBid,
+              acquiredInRound: localAuctionState.currentRound,
+              createdAt: resolvedAt,
+            },
+            ...curr,
+          ]);
+        } else {
+          setLocalPlayers((curr) =>
+            curr.map((player) =>
+              player.id === currentPlayer.id
+                ? { ...player, status: "UNSOLD", currentTeamId: null, soldPrice: null }
+                : player,
+            ),
+          );
+        }
+      }
+      setLocalAuctionState((curr) => ({
+        ...curr,
+        phase: (payload.phase as typeof curr.phase | undefined) ?? curr.phase,
+        currentRound: payload.round ?? curr.currentRound,
+        currentPlayerId: payload.playerId ?? null,
+        currentBid: null,
+        currentTeamId: null,
+        expiresAt: optimisticExpiresAt,
+        pausedRemainingMs: null,
+        skipVoteTeamIds: [],
+        version: curr.version + 1,
+      }));
+      setRemainingSeconds(getRemainingSeconds(optimisticExpiresAt));
+
+      // Fire the overlay directly for the admin (other users get it from the AUCTION_ADVANCED broadcast handler)
+      if (currentPlayer) {
+        const isSold = currentBid !== null && currentTeam;
+        setResultOverlay({
+          kind: isSold ? "SOLD" : "UNSOLD",
+          playerName: currentPlayer.name,
+          teamName: isSold ? currentTeam.name : undefined,
+          price: isSold ? currentBid : undefined,
+        });
+        const overlayTimer = window.setTimeout(() => setResultOverlay(null), 2500);
+        void overlayTimer;
+      }
+      channelRef.current?.send({
+        type: "broadcast",
+        event: "AUCTION_ADVANCED",
+        payload: {
+          phase: payload.phase ?? localAuctionState.phase,
+          round: payload.round ?? localAuctionState.currentRound,
+          playerId: payload.playerId ?? null,
+          previousPlayerId: currentPlayer?.id ?? null,
+          previousPlayerStatus: currentBid !== null && currentTeam ? "SOLD" : "UNSOLD",
+          winningTeamId: currentTeam?.id ?? null,
+          winningBid: currentBid ?? null,
+          expiresAt: optimisticExpiresAt,
+          version: localAuctionState.version + 2,
+        } satisfies AdvancePayload,
+      });
+      channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
+      refreshRoom();
     } catch (err) {
       setActionError(toErrorMessage(err));
+      // Reset the auto-advance key so it can be retried if this was a clock skew issue
+      autoAdvanceKey.current = null;
     } finally {
       setAdvancePending(false);
     }
   }
 
   async function handleEndRound() {
-    const msg = hasAvailablePlayers
-      ? "End the round? All remaining players will be marked unsold and the auction will complete."
-      : "Close the auction window? No further changes will be possible.";
-    if (!window.confirm(msg)) return;
+    setEndRoundPending(true);
     try {
       const res = await fetch(
         `/api/rooms/${snapshot.room.code}/auction/end-round`,
@@ -260,9 +564,13 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       );
       const payload = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(payload.error ?? "Failed to end round.");
-      router.refresh();
+      setEndRoundConfirmOpen(false);
+      channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
+      refreshRoom();
     } catch (err) {
       setActionError(toErrorMessage(err));
+    } finally {
+      setEndRoundPending(false);
     }
   }
 
@@ -284,8 +592,30 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       );
       const payload = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(payload.error ?? "Failed to start next round.");
+      setLocalPlayers((curr) =>
+        curr.map((player) =>
+          selectedPlayerIds.includes(player.id) && player.status === "UNSOLD"
+            ? { ...player, status: "AVAILABLE" }
+            : player,
+        ),
+      );
+      setLocalAuctionState((curr) => ({
+        ...curr,
+        phase: "LIVE",
+        currentRound: curr.currentRound + 1,
+        currentPlayerId: selectedPlayerIds[0] ?? null,
+        currentBid: null,
+        currentTeamId: null,
+        expiresAt:
+          selectedPlayerIds[0] != null
+            ? new Date(Date.now() + snapshot.room.timerSeconds * 1000).toISOString()
+            : null,
+        skipVoteTeamIds: [],
+        version: curr.version + 1,
+      }));
       setSelectedPlayerIds([]);
-      router.refresh();
+      channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
+      refreshRoom();
     } catch (err) {
       setActionError(toErrorMessage(err));
     } finally {
@@ -293,69 +623,140 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     }
   }
 
-  async function handleBid(increment?: number) {
-    if (!bidTeamId) return;
+  async function handleBid(increment?: number, teamIdOverride?: string): Promise<string | null> {
+    const teamId = teamIdOverride ?? bidTeamId;
+    if (!teamId) return "No team selected.";
+    if (!isBiddingOpen) return "Bidding time has ended for this player.";
     setBidPending(true);
     setBidError(null);
     try {
       const res = await fetch(`/api/rooms/${snapshot.room.code}/auction/bid`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamId: bidTeamId, increment }),
+        body: JSON.stringify({ teamId, increment }),
       });
-      const payload = (await res.json()) as { error?: string };
-      if (!res.ok) setBidError(payload.error ?? "Bid failed.");
-      else router.refresh();
+      const payload = (await res.json()) as {
+        error?: string;
+        amount?: number;
+        timing?: {
+          totalMs: number;
+          steps: Array<{ step: string; ms: number }>;
+        };
+      };
+      if (!res.ok) {
+        const message = payload.error ?? "Bid failed.";
+        setBidError(message);
+        return message;
+      } else {
+        if (payload.timing) {
+          console.info(
+            "[auction-bid-client-timing]",
+            `total=${payload.timing.totalMs}ms`,
+            payload.timing.steps.map((step) => `${step.step}:${step.ms}ms`).join(" | "),
+          );
+        }
+        const nextAmount = payload.amount ?? currentBid ?? currentPlayer?.basePrice ?? 0;
+        const nextExpiresAt = new Date(
+          Date.now() + snapshot.room.timerSeconds * 1000,
+        ).toISOString();
+        setLocalAuctionState((curr) => ({
+          ...curr,
+          currentBid: nextAmount,
+          currentTeamId: teamId,
+          expiresAt: nextExpiresAt,
+          version: curr.version + 1,
+          lastEvent: "NEW_BID",
+        }));
+        setLocalBids((curr) => [
+          {
+            id: `optimistic-bid-${Date.now()}`,
+            roomId: snapshot.room.id,
+            playerId: currentPlayer?.id ?? curr[0]?.playerId ?? "",
+            teamId,
+            amount: nextAmount,
+            createdAt: new Date().toISOString(),
+            createdBy: snapshot.user?.id ?? "unknown",
+          },
+          ...curr,
+        ]);
+        setRemainingSeconds(getRemainingSeconds(nextExpiresAt));
+        channelRef.current?.send({
+          type: "broadcast",
+          event: ROOM_EVENTS.newBid,
+          payload: {
+            playerId: currentPlayer?.id ?? "",
+            teamId,
+            amount: nextAmount,
+            expiresAt: nextExpiresAt,
+            version: localAuctionState.version + 1,
+          } satisfies BidPlacedPayload,
+        });
+        channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
+        refreshRoom();
+        return null;
+      }
     } catch (err) {
-      setBidError(toErrorMessage(err));
+      const message = toErrorMessage(err);
+      setBidError(message);
+      return message;
     } finally {
       setBidPending(false);
     }
   }
 
-  async function handleSkipVote() {
-    if (!bidTeamId) return;
-    setSkipPending(true);
-    setBidError(null);
-    try {
-      const res = await fetch(`/api/rooms/${snapshot.room.code}/auction/skip-vote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamId: bidTeamId }),
-      });
-      const payload = (await res.json()) as { error?: string };
-      if (!res.ok) setBidError(payload.error ?? "Skip vote failed.");
-      else router.refresh();
-    } catch (err) {
-      setBidError(toErrorMessage(err));
-    } finally {
-      setSkipPending(false);
-    }
-  }
-
-  async function sendReaction(emoji: string) {
-    let context: string | undefined;
-    if (currentPlayer) {
-      if (snapshot.auctionState.currentBid && currentTeam) {
-        context = `${currentPlayer.name} · ${formatCurrencyShort(snapshot.auctionState.currentBid)} → ${currentTeam.shortCode}`;
-      } else {
-        context = currentPlayer.name;
-      }
-    }
-    const reaction: EmojiReaction = {
-      emoji,
-      sentAt: new Date().toISOString(),
+  async function sendChatEntry(kind: "text" | "emoji", text: string) {
+    const payload: ChatMessagePayload = {
+      id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind,
+      userId: snapshot.user?.id ?? null,
       userName: snapshot.user?.displayName ?? snapshot.user?.email ?? "Member",
-      context,
+      userTag: myOwnedTeam?.shortCode ?? (isAdmin ? "ADMIN" : null),
+      text,
+      sentAt: new Date().toISOString(),
     };
-    setRecentReactions((curr) => [reaction, ...curr].slice(0, 12));
+
+    setChatMessages((curr) =>
+      [
+        ...curr,
+        {
+          id: payload.id,
+          kind: payload.kind,
+          userName: payload.userName,
+          userTag: payload.userTag,
+          text: payload.text,
+          sentAt: payload.sentAt,
+          isOwn: true,
+        },
+      ].slice(-50),
+    );
+
     if (!channelRef.current) return;
     await channelRef.current.send({
       type: "broadcast",
-      event: ROOM_EVENTS.emoji,
-      payload: reaction,
+      event: ROOM_EVENTS.chatMessage,
+      payload,
     });
   }
+
+  const feedItems = [...localBids.map(b => ({
+    type: "BID" as const, id: b.id, createdAt: b.createdAt, teamId: b.teamId, playerId: b.playerId, amount: b.amount
+  })), ...localSquads.map(sq => ({
+    type: "SOLD" as const, id: `sq-${sq.id}`, createdAt: sq.createdAt, teamId: sq.teamId, playerId: sq.playerId, amount: sq.purchasePrice
+  }))].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 12);
+  const soldTickerItems = [...localSquads]
+    .slice()
+    .map((entry) => {
+      const player = localPlayers.find((item) => item.id === entry.playerId);
+      const team = localTeams.find((item) => item.id === entry.teamId);
+      return {
+        id: entry.id,
+        playerName: player?.name ?? "Unknown player",
+        teamCode: team?.shortCode ?? "?",
+        teamName: team?.name ?? null,
+        amount: entry.purchasePrice,
+        role: player?.role ?? null,
+      };
+    });
 
   return (
     <>
@@ -365,26 +766,101 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
           className={`result-overlay ${resultOverlay.kind === "SOLD" ? "sold" : "unsold"}`}
         >
           <div className="result-overlay-label">{resultOverlay.kind}</div>
-          <div className="result-overlay-sub">{resultOverlay.playerName}</div>
+          <div className="result-overlay-sub">
+            {resultOverlay.playerName}
+            {resultOverlay.kind === "SOLD" && resultOverlay.teamName && resultOverlay.price && (
+              <span style={{ display: "block", marginTop: "0.5rem", fontSize: "0.8em", opacity: 0.9 }}>
+                to <strong>{resultOverlay.teamName}</strong> for <strong>{formatCurrencyShort(resultOverlay.price)}</strong>
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Squad drawer backdrop */}
+      {endRoundConfirmOpen && (
+        <div className="app-modal-backdrop" onClick={() => setEndRoundConfirmOpen(false)}>
+          <div
+            className="app-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="app-modal-head">
+              <h3 style={{ margin: 0 }}>
+                {hasAvailablePlayers ? "End round" : "Complete auction"}
+              </h3>
+            </div>
+            <p className="subtle" style={{ margin: 0, lineHeight: 1.6 }}>
+              {hasAvailablePlayers
+                ? "All remaining available players will be marked unsold and the auction will be completed."
+                : "This will complete the auction now. You can still start the auction again later if you want another round."}
+            </p>
+            <div className="app-modal-actions">
+              <button
+                className="button ghost"
+                disabled={endRoundPending}
+                onClick={() => setEndRoundConfirmOpen(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="button danger"
+                disabled={endRoundPending}
+                onClick={() => void handleEndRound()}
+                type="button"
+              >
+                {endRoundPending
+                  ? hasAvailablePlayers
+                    ? "Ending..."
+                    : "Completing..."
+                  : hasAvailablePlayers
+                  ? "End round"
+                  : "Complete auction"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
-        className={`drawer-backdrop${drawerOpen ? " open" : ""}`}
-        onClick={() => setDrawerOpen(false)}
+        className={`drawer-backdrop${chatOpen ? " open" : ""}`}
+        onClick={() => setChatOpen(false)}
+      />
+      <div
+        className={`drawer-backdrop${squadOpen ? " open" : ""}`}
+        onClick={() => setSquadOpen(false)}
       />
 
-      {/* Squad drawer */}
-      <div className={`drawer-panel${drawerOpen ? " open" : ""}`}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "1rem",
-          }}
-        >
+      <div className={`drawer-panel drawer-panel-left drawer-panel-chat${chatOpen ? " open" : ""}`}>
+        <div className="drawer-header-row">
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: "var(--font-display)",
+              letterSpacing: "-0.04em",
+            }}
+          >
+            Chat
+          </h2>
+          <button
+            className="button ghost"
+            style={{ minHeight: "32px", padding: "0.3rem 0.75rem", fontSize: "0.85rem" }}
+            onClick={() => setChatOpen(false)}
+            type="button"
+          >
+            Close
+          </button>
+        </div>
+        <AuctionChatPanel
+          messages={chatMessages}
+          onSendEmoji={(emoji) => sendChatEntry("emoji", emoji)}
+          onSendMessage={(message) => sendChatEntry("text", message)}
+        />
+      </div>
+
+      <div className={`drawer-panel drawer-panel-right${squadOpen ? " open" : ""}`}>
+        <div className="drawer-header-row">
           <h2
             style={{
               margin: 0,
@@ -397,32 +873,45 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
           <button
             className="button ghost"
             style={{ minHeight: "32px", padding: "0.3rem 0.75rem", fontSize: "0.85rem" }}
-            onClick={() => setDrawerOpen(false)}
+            onClick={() => setSquadOpen(false)}
             type="button"
           >
-            ✕ Close
+            Close
           </button>
         </div>
         <SquadBoard
           currentUserId={snapshot.user?.id ?? null}
           isAdmin={isAdmin}
-          phase={snapshot.auctionState.phase}
-          players={snapshot.players}
+          phase={localAuctionState.phase}
+          players={localPlayers}
           roomCode={snapshot.room.code}
-          squads={snapshot.squads}
-          teams={snapshot.teams}
+          squads={localSquads}
+          teams={localTeams}
         />
       </div>
 
-      {/* Drawer toggle tab */}
-      {!drawerOpen && (
-        <button
-          className="drawer-tab"
-          onClick={() => setDrawerOpen(true)}
-          type="button"
-        >
-          SQUADS
-        </button>
+      {!chatOpen && (
+        <div className="drawer-tab-stack drawer-tab-stack-left">
+          <button
+            className="drawer-tab secondary"
+            onClick={() => setChatOpen(true)}
+            type="button"
+          >
+            CHAT
+          </button>
+        </div>
+      )}
+
+      {!squadOpen && (
+        <div className="drawer-tab-stack drawer-tab-stack-right">
+          <button
+            className="drawer-tab"
+            onClick={() => setSquadOpen(true)}
+            type="button"
+          >
+            SQUADS
+          </button>
+        </div>
       )}
 
       <div className="auction-full">
@@ -438,22 +927,37 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
             }}
           >
             <span
-              className="brand"
-              style={{ fontSize: "1rem", letterSpacing: "-0.03em" }}
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}
             >
-              {snapshot.room.name}
+              <Image
+                alt="SFL"
+                height={22}
+                src="/images/sfl.png"
+                style={{ objectFit: "contain" }}
+                width={22}
+              />
+              <span className="brand" style={{ fontSize: "0.95rem", letterSpacing: "-0.03em" }}>
+                SFL
+              </span>
+              <span style={{ opacity: 0.35, fontSize: "0.85rem" }}>•</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: "0.9rem" }}>
+                {snapshot.room.name}
+              </span>
             </span>
-            <span className="pill">Round {snapshot.auctionState.currentRound}</span>
+            <span className="pill">Round {localAuctionState.currentRound}</span>
             <span className="pill">
-              {soldCount}/{snapshot.players.length} sold
+              {soldCount}/{localPlayers.length} sold
             </span>
             <span className="pill highlight">{effectivePhase}</span>
-            {skipVoteCount > 0 && isLive && (
-              <span
-                className="pill"
-                style={{ background: "rgba(183,121,31,0.12)", color: "var(--warning)" }}
-              >
-                Skip {skipVoteCount}/{snapshot.teams.length}
+            {myOwnedTeam && (
+              <span className="my-team-chip">
+                <span className="my-team-chip-avatar">
+                  {myOwnedTeam.shortCode?.slice(0, 2).toUpperCase() ?? "T"}
+                </span>
+                {myOwnedTeam.name}
+                <span className="my-team-chip-purse">
+                  {formatCurrencyShort(myOwnedTeam.purseRemaining)}
+                </span>
               </span>
             )}
           </div>
@@ -494,7 +998,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   }
                   type="button"
                 >
-                  {pausePending ? "Pausing…" : "Pause"}
+                  {pausePending ? "Pausing..." : "Pause"}
                 </button>
                 <button
                   className="button secondary"
@@ -509,7 +1013,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   }
                   type="button"
                 >
-                  {resumePending ? "Resuming…" : "Resume"}
+                  {resumePending ? "Resuming..." : "Resume"}
                 </button>
                 <button
                   className="button warning"
@@ -518,16 +1022,17 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   onClick={() => void runAdvance()}
                   type="button"
                 >
-                  {advancePending ? "Selling…" : "Sell / next"}
+                  {advancePending ? "Selling..." : "Sell / next"}
                 </button>
                 {effectivePhase !== "ROUND_END" && (
                   <button
                     className="button danger"
                     style={{ minHeight: "34px", padding: "0.35rem 0.8rem", fontSize: "0.82rem" }}
-                    onClick={() => void handleEndRound()}
+                    disabled={endRoundPending}
+                    onClick={() => setEndRoundConfirmOpen(true)}
                     type="button"
                   >
-                    {hasAvailablePlayers ? "End round" : "Close window"}
+                    {hasAvailablePlayers ? "End round" : "Complete auction"}
                   </button>
                 )}
               </>
@@ -539,8 +1044,12 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
           </div>
         </header>
 
+        {soldTickerItems.length > 0 && (
+          <SoldPlayerShowcase items={soldTickerItems} showDetail={false} variant="ticker" />
+        )}
+
         {/* MAIN BODY */}
-        <div className={`auction-body${!isAdmin ? " has-bottom-bar" : ""}`}>
+        <div className={`auction-body${showPlayerBidBar ? " has-bottom-bar" : ""}`}>
           <div className="auction-content">
             {/* Player spotlight */}
             <div className="panel">
@@ -608,12 +1117,12 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                       ? formatCurrencyShort(currentBid)
                       : currentPlayer
                       ? formatCurrencyShort(currentPlayer.basePrice)
-                      : "—"}
+                      : "-"}
                   </div>
-                  {currentTeam ? (
+                      {currentTeam ? (
                     <div style={{ marginTop: "0.4rem" }}>
                       <span className="pill highlight" style={{ fontSize: "0.73rem" }}>
-                        {!isAdmin && isLeading
+                        {isLeading
                           ? "You're leading!"
                           : `${currentTeam.shortCode} leading`}
                       </span>
@@ -673,31 +1182,74 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 <strong>{unsoldCount}</strong>Unsold
               </div>
               <div className="stat-tile">
-                <strong>{snapshot.teams.length}</strong>Teams
+                <strong>{localTeams.length}</strong>Teams
               </div>
               <div className="stat-tile">
                 <strong>
-                  {snapshot.auctionState.currentBid !== null
-                    ? formatCurrencyShort(snapshot.auctionState.currentBid)
-                    : "—"}
+                  {localAuctionState.currentBid !== null
+                    ? formatCurrencyShort(localAuctionState.currentBid)
+                    : "-"}
                 </strong>
                 Current bid
               </div>
             </div>
 
-            {/* ROUND_END — admin picks players for next round */}
+            <div className="panel">
+              <details>
+                <summary
+                  style={{
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    listStyle: "none",
+                  }}
+                >
+                  <div>
+                    <h3 style={{ margin: 0 }}>Auction pool</h3>
+                    <div className="subtle" style={{ fontSize: "0.82rem", marginTop: "0.2rem" }}>
+                      See everyone still in the auction without revealing the live order.
+                    </div>
+                  </div>
+                  <span className="pill">{auctionPoolPlayers.length} players</span>
+                </summary>
+                <div className="pill-row" style={{ marginTop: "1rem" }}>
+                  {auctionPoolPlayers.length === 0 ? (
+                    <div className="empty-state" style={{ width: "100%" }}>
+                      No players left in the auction pool.
+                    </div>
+                  ) : (
+                    auctionPoolPlayers.map((player) => (
+                      <span
+                        className={`pill${player.id === localAuctionState.currentPlayerId ? " highlight" : ""}`}
+                        key={player.id}
+                        style={{ fontSize: "0.8rem" }}
+                      >
+                        {player.name}
+                        <span style={{ opacity: 0.7, marginLeft: "0.35rem" }}>
+                          {player.role}
+                        </span>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </details>
+            </div>
+
+            {/* ROUND_END â€” admin picks players for next round */}
             {effectivePhase === "ROUND_END" && isAdmin && (
               <div className="panel" style={{ borderColor: "rgba(183,121,31,0.3)", background: "rgba(183,121,31,0.04)" }}>
-                <h3 style={{ margin: "0 0 0.25rem" }}>Round {snapshot.auctionState.currentRound} complete</h3>
+                <h3 style={{ margin: "0 0 0.25rem" }}>Round {localAuctionState.currentRound} complete</h3>
                 <p className="subtle" style={{ margin: "0 0 0.75rem", fontSize: "0.875rem" }}>
-                  Select the unsold players to carry forward to Round {snapshot.auctionState.currentRound + 1}.
+                  Select the unsold players to carry forward to Round {localAuctionState.currentRound + 1}.
                   Unselected players stay unsold.
                 </p>
                 <div className="checkbox-grid" style={{ marginBottom: "0.75rem" }}>
-                  {snapshot.players.filter((p) => p.status === "UNSOLD").length === 0 ? (
+                  {localPlayers.filter((p) => p.status === "UNSOLD").length === 0 ? (
                     <div className="subtle">No unsold players available.</div>
                   ) : (
-                    snapshot.players
+                    localPlayers
                       .filter((p) => p.status === "UNSOLD")
                       .sort((a, b) => a.orderIndex - b.orderIndex)
                       .map((player) => (
@@ -716,7 +1268,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                           <span>
                             {player.name}
                             <span className="subtle" style={{ marginLeft: "0.4rem", fontSize: "0.8rem" }}>
-                              {player.role} · Base {formatCurrencyShort(player.basePrice)}
+                              {player.role} • Base {formatCurrencyShort(player.basePrice)}
                             </span>
                           </span>
                         </label>
@@ -731,15 +1283,17 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     type="button"
                   >
                     {nextRoundPending
-                      ? "Starting…"
-                      : `Start Round ${snapshot.auctionState.currentRound + 1} (${selectedPlayerIds.length} players)`}
+                      ? "Starting..."
+                      : localAuctionState.currentRound === 0 
+                        ? `Start Auction (${selectedPlayerIds.length} players)` 
+                        : `Start Round ${localAuctionState.currentRound + 1} (${selectedPlayerIds.length} players)`}
                   </button>
                   <button
                     className="button ghost"
                     disabled={nextRoundPending}
                     onClick={() =>
                       setSelectedPlayerIds(
-                        snapshot.players.filter((p) => p.status === "UNSOLD").map((p) => p.id),
+                        localPlayers.filter((p) => p.status === "UNSOLD").map((p) => p.id),
                       )
                     }
                     type="button"
@@ -766,36 +1320,54 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
 
             {effectivePhase === "ROUND_END" && !isAdmin && (
               <div className="notice warning">
-                Round {snapshot.auctionState.currentRound} ended — waiting for admin to select players for the next round.
+                Round {localAuctionState.currentRound} ended - waiting for admin to select players for the next round.
               </div>
             )}
 
             {/* Admin: full multi-team bid panel */}
             {isAdmin && effectivePhase !== "ROUND_END" && (
               <BidPanel
-                auctionState={snapshot.auctionState}
+                auctionState={localAuctionState}
                 currentMember={snapshot.currentMember}
                 currentPlayer={currentPlayer}
+                isBiddingOpen={isBiddingOpen}
+                onBidAction={async (teamId, increment) => {
+                  setBidTeamId(teamId);
+                  return handleBid(increment, teamId);
+                }}
                 roomCode={snapshot.room.code}
-                teams={snapshot.teams}
+                teams={localTeams}
               />
             )}
 
-            {/* Recent bids */}
+            {/* Recent bids & purchases */}
             <div className="panel">
-              <h3>Recent bids</h3>
-              <div className="bid-log">
-                {snapshot.bids.length === 0 ? (
-                  <div className="empty-state">No bids recorded yet.</div>
+              <h3>Auction feed</h3>
+              <div className="bid-log" style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                {feedItems.length === 0 ? (
+                  <div className="empty-state">No events recorded yet.</div>
                 ) : (
-                  snapshot.bids.slice(0, 10).map((bid) => {
-                    const team = snapshot.teams.find((t) => t.id === bid.teamId);
-                    const player = snapshot.players.find((p) => p.id === bid.playerId);
+                  feedItems.map((item) => {
+                    const team = localTeams.find((t) => t.id === item.teamId);
+                    const player = localPlayers.find((p) => p.id === item.playerId);
+                    
+                    if (item.type === "SOLD") {
+                      return (
+                        <div className="bid-row" key={item.id} style={{ background: "rgba(16, 185, 129, 0.1)", borderLeft: "3px solid var(--success)", paddingLeft: "0.5rem" }}>
+                          Sold: <strong>{player?.name ?? "Unknown player"}</strong>
+                          {" bought by "}
+                          <strong style={{ color: "var(--success)" }}>{team?.shortCode ?? "?"}</strong>
+                          {" for "}
+                          <strong>{formatCurrencyShort(item.amount)}</strong>
+                        </div>
+                      );
+                    }
+                    
                     return (
-                      <div className="bid-row" key={bid.id}>
+                      <div className="bid-row" key={item.id}>
                         <strong>{team?.shortCode ?? "?"}</strong>
                         {" bid "}
-                        <strong>{formatCurrencyShort(bid.amount)}</strong>
+                        <strong>{formatCurrencyShort(item.amount)}</strong>
                         {" for "}
                         {player?.name ?? "Unknown player"}
                       </div>
@@ -805,33 +1377,30 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
               </div>
             </div>
 
-            {/* Emoji reactions */}
-            <EmojiReactions onSend={sendReaction} recent={recentReactions} />
-
             {/* Trades */}
             <TradePanel
               currentUserId={snapshot.user?.id ?? null}
               isAdmin={isAdmin}
-              players={snapshot.players}
+              players={localPlayers}
               roomCode={snapshot.room.code}
-              squads={snapshot.squads}
-              teams={snapshot.teams}
+              squads={localSquads}
+              teams={localTeams}
               trades={snapshot.trades}
             />
           </div>
         </div>
 
-        {/* BOTTOM BID BAR — non-admin players */}
-        {!isAdmin && (
+        {/* BOTTOM BID BAR â€” non-admin players */}
+        {showPlayerBidBar && (
           <footer className="auction-bottom-bar">
-            {snapshot.teams.length > 1 && (
+            {bidBarTeams.length > 1 && (
               <select
                 className="select"
                 style={{ width: "auto", minWidth: "100px", minHeight: "52px" }}
                 value={bidTeamId}
                 onChange={(e) => setBidTeamId(e.target.value)}
               >
-                {snapshot.teams.map((t) => (
+                {bidBarTeams.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.shortCode} ({formatCurrencyShort(t.purseRemaining)})
                   </option>
@@ -866,7 +1435,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 type="button"
               >
                 {bidPending
-                  ? "…"
+                  ? "..."
                   : `Open ${currentPlayer ? formatCurrencyShort(currentPlayer.basePrice) : ""}`}
               </button>
             ) : (
@@ -880,33 +1449,16 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                     key={inc}
                     className={`bid-button-lg${isLeading ? " leading" : ""}`}
                     disabled={
-                      !isLive || !currentPlayer || isLeading || !canAfford || bidPending
+                      !isBiddingOpen || !currentPlayer || isLeading || !canAfford || bidPending
                     }
                     onClick={() => void handleBid(inc)}
                     title={`Bid ${formatCurrencyShort(nextAmount)}`}
                     type="button"
                   >
-                    {bidPending ? "…" : `+${formatIncrement(inc)}`}
+                    {bidPending ? "..." : `+${formatIncrement(inc)}`}
                   </button>
                 );
               })
-            )}
-
-            {isLive && currentPlayer && (
-              <button
-                className="button ghost"
-                style={{
-                  minHeight: "52px",
-                  borderRadius: "16px",
-                  padding: "0.75rem 1.1rem",
-                  flexShrink: 0,
-                }}
-                disabled={hasSkipVoted || skipPending || bidPending}
-                onClick={() => void handleSkipVote()}
-                type="button"
-              >
-                {hasSkipVoted ? "✓ Skip" : skipPending ? "…" : "Skip"}
-              </button>
             )}
           </footer>
         )}
@@ -914,3 +1466,5 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     </>
   );
 }
+
+

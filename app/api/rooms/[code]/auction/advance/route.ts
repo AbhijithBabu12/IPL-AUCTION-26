@@ -1,10 +1,11 @@
-import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { canAuctionComplete, resolveExpiredAuction } from "@/lib/domain/auction";
+import { resolveExpiredAuction, shuffleItems } from "@/lib/domain/auction";
 import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
-import { requireApiUser, syncUserProfileFromAuthUser } from "@/lib/server/auth";
+import { isMissingColumnError, omitOptionalColumns } from "@/lib/server/auction-state";
+import { requireApiUser } from "@/lib/server/auth";
+import { reorderPlayersSafely } from "@/lib/server/player-order";
 import { getRoomEntities, requireRoomAdmin } from "@/lib/server/room";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -15,7 +16,6 @@ export async function POST(
   try {
     const { code } = await context.params;
     const authUser = await requireApiUser();
-    await syncUserProfileFromAuthUser(authUser);
     const { room } = await requireRoomAdmin(code, authUser.id);
     const admin = getSupabaseAdminClient();
     const { players, teams, auctionState, squads } = await getRoomEntities(room.id);
@@ -29,6 +29,7 @@ export async function POST(
       auctionState,
       players,
       now: new Date(),
+      forceResolution: true,
     });
 
     const { data: claimState, error: claimError } = await admin
@@ -109,59 +110,91 @@ export async function POST(
       }
     }
 
-    // Compute updated squads and purses to check auto-termination
-    const updatedSquads = resolution.sold
-      ? [
-          ...squads,
-          {
-            id: "",
-            roomId: room.id,
-            teamId: auctionState.currentTeamId!,
-            playerId: resolution.currentPlayer.id,
-            purchasePrice: auctionState.currentBid!,
-            acquiredInRound: auctionState.currentRound,
-            createdAt: "",
-          },
-        ]
-      : squads;
+    const resolvedPlayers = players.map((player) =>
+      player.id === resolution.currentPlayer.id
+        ? {
+            ...player,
+            status: resolution.sold ? "SOLD" : "UNSOLD",
+            currentTeamId: resolution.sold ? auctionState.currentTeamId : null,
+            soldPrice: resolution.sold ? auctionState.currentBid : null,
+          }
+        : player,
+    );
 
-    const updatedTeams = resolution.sold
-      ? teams.map((t) =>
-          t.id === auctionState.currentTeamId
-            ? { ...t, purseRemaining: t.purseRemaining - auctionState.currentBid! }
-            : t,
-        )
-      : teams;
+    const unsoldPlayers = resolvedPlayers
+      .filter((player) => player.status === "UNSOLD")
+      .sort((left, right) => left.orderIndex - right.orderIndex);
 
-    // Don't force-complete if we're intentionally going to ROUND_END for admin picker
-    const forceComplete =
-      resolution.nextPhase !== "COMPLETED" &&
-      resolution.nextPhase !== "ROUND_END" &&
-      canAuctionComplete(updatedTeams, updatedSquads);
+    let finalPhase = resolution.nextPhase;
+    let finalPlayerId = resolution.nextPlayerId;
+    let finalExpiresAt = resolution.expiresAt;
+    let finalLastEvent = resolution.lastEvent;
+    let finalRound = resolution.nextRound;
 
-    const finalPhase = forceComplete ? "COMPLETED" : resolution.nextPhase;
-    const finalPlayerId = forceComplete ? null : resolution.nextPlayerId;
-    const finalExpiresAt = forceComplete ? null : resolution.expiresAt;
-    const finalLastEvent = forceComplete ? "AUCTION_COMPLETED" : resolution.lastEvent;
+    if (!resolution.nextPlayerId && unsoldPlayers.length > 0) {
+      const shuffledUnsoldPlayers = shuffleItems(unsoldPlayers);
+      await reorderPlayersSafely(
+        room.id,
+        shuffledUnsoldPlayers.map((player) => ({
+          id: player.id,
+          orderIndex: player.orderIndex,
+        })),
+      );
 
-    const { data: finalState, error: finalError } = await admin
+      const { error: recycleError } = await admin
+        .from("players")
+        .update({ status: "AVAILABLE" })
+        .eq("room_id", room.id)
+        .eq("status", "UNSOLD");
+
+      if (recycleError) {
+        throw new AppError(recycleError.message, 500, "ROUND_RECYCLE_FAILED");
+      }
+
+      finalRound = resolution.nextRound + 1;
+      finalPhase = "LIVE";
+      finalPlayerId = shuffledUnsoldPlayers[0]?.id ?? null;
+      finalExpiresAt = new Date(Date.now() + room.timerSeconds * 1000).toISOString();
+      finalLastEvent = "ROUND_STARTED";
+    } else if (!resolution.nextPlayerId) {
+      finalPhase = "ROUND_END";
+      finalPlayerId = null;
+      finalExpiresAt = null;
+      finalLastEvent = "ROUND_END";
+    }
+
+    const finalUpdate = {
+      phase: finalPhase,
+      current_round: finalRound,
+      current_player_id: finalPlayerId,
+      current_bid: null,
+      current_team_id: null,
+      expires_at: finalExpiresAt,
+      paused_remaining_ms: null,
+      skip_vote_team_ids: [],
+      version: Number(claimState.version) + 1,
+      last_event: finalLastEvent,
+    };
+
+    let { data: finalState, error: finalError } = await admin
       .from("auction_state")
-      .update({
-        phase: finalPhase,
-        current_round: resolution.nextRound,
-        current_player_id: finalPlayerId,
-        current_bid: null,
-        current_team_id: null,
-        expires_at: finalExpiresAt,
-        paused_remaining_ms: null,
-        skip_vote_team_ids: [],
-        version: Number(claimState.version) + 1,
-        last_event: finalLastEvent,
-      })
+      .update(finalUpdate)
       .eq("room_id", room.id)
       .eq("version", claimState.version)
       .select("*")
       .maybeSingle();
+
+    if (finalError && isMissingColumnError(finalError.message)) {
+      const retry = await admin
+        .from("auction_state")
+        .update(omitOptionalColumns(finalUpdate))
+        .eq("room_id", room.id)
+        .eq("version", claimState.version)
+        .select("*")
+        .maybeSingle();
+      finalState = retry.data;
+      finalError = retry.error;
+    }
 
     if (finalError) {
       throw new AppError(finalError.message, 500, "AUCTION_FINALIZE_FAILED");
@@ -170,10 +203,6 @@ export async function POST(
     if (!finalState) {
       throw new AppError("Final auction update conflicted. Refresh the room.", 409, "VERSION_CONFLICT");
     }
-
-    revalidatePath(`/room/${room.code}`);
-    revalidatePath(`/auction/${room.code}`);
-    revalidatePath(`/results/${room.code}`);
 
     return NextResponse.json({
       phase: finalPhase,

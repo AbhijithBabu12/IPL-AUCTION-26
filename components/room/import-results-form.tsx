@@ -14,8 +14,13 @@ interface PreviewData {
 function previewWorkbook(file: File): Promise<PreviewData> {
   return file.arrayBuffer().then((buf) => {
     const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
-    const UNSOLD_SHEET = "Unsold Players";
-    const teamSheets = wb.SheetNames.filter((n) => n !== UNSOLD_SHEET);
+    const unsoldSheetName =
+      wb.SheetNames.find((n) =>
+        ["Unsold Players", "XSell", "XSELL", "Unsold"].some(
+          (candidate) => candidate.toLowerCase() === n.toLowerCase(),
+        ),
+      ) ?? null;
+    const teamSheets = wb.SheetNames.filter((n) => n !== unsoldSheetName);
 
     let soldTotal = 0;
     for (const name of teamSheets) {
@@ -29,8 +34,8 @@ function previewWorkbook(file: File): Promise<PreviewData> {
         .length;
     }
 
-    const unsoldRows = wb.Sheets[UNSOLD_SHEET]
-      ? XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[UNSOLD_SHEET]!, {
+    const unsoldRows = unsoldSheetName && wb.Sheets[unsoldSheetName]
+      ? XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[unsoldSheetName]!, {
           header: 1,
           defval: "",
         })
@@ -86,13 +91,16 @@ export function ImportResultsForm({ roomCode }: { roomCode: string }) {
         teams?: number;
         soldPlayers?: number;
         unsoldPlayers?: number;
+        readyToContinue?: boolean;
         error?: string;
       };
 
       if (!res.ok) throw new Error(payload.error ?? "Import failed.");
 
       setResult(
-        `Imported ${payload.teams} teams, ${payload.soldPlayers} sold players, ${payload.unsoldPlayers} unsold players. Auction marked as complete.`,
+        payload.readyToContinue
+          ? `Imported ${payload.teams} teams, ${payload.soldPlayers} sold players, and ${payload.unsoldPlayers} remaining players. Room is ready to continue with the unsold pool.`
+          : `Imported ${payload.teams} teams, ${payload.soldPlayers} sold players, ${payload.unsoldPlayers} unsold players. Auction marked as complete.`,
       );
       setSelectedFile(null);
       setPreview(null);
@@ -123,8 +131,8 @@ export function ImportResultsForm({ roomCode }: { roomCode: string }) {
       <div className="subtle">
         Upload a workbook where each sheet is a team (with columns{" "}
         <span className="mono">#, Player, Role, IPL Team, Price, Price (₹L)</span>
-        ) and an <span className="mono">Unsold Players</span> sheet. Existing teams,
-        players, and squads in this room will be replaced.
+        ) and an <span className="mono">Unsold Players</span> or <span className="mono">XSell</span> sheet.
+        Existing teams, players, and squads in this room will be replaced.
       </div>
 
       {preview && (

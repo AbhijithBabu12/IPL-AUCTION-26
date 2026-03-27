@@ -8,9 +8,11 @@ import { toErrorMessage } from "@/lib/utils";
 export function StartAuctionButton({
   roomCode,
   disabled,
+  label = "Start auction",
 }: {
   roomCode: string;
   disabled?: boolean;
+  label?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -48,7 +50,7 @@ export function StartAuctionButton({
         onClick={handleStart}
         type="button"
       >
-        {pending ? "Starting..." : "Start auction"}
+        {pending ? "Starting..." : label}
       </button>
     </div>
   );

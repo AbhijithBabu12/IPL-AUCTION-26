@@ -1,9 +1,9 @@
-import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { buildResumedAuctionState } from "@/lib/domain/auction";
 import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
+import { isMissingColumnError, omitOptionalColumns } from "@/lib/server/auction-state";
 import { requireApiUser } from "@/lib/server/auth";
 import { getAuctionStateOnly, requireRoomAdmin } from "@/lib/server/room";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -25,19 +25,32 @@ export async function POST(
     const now = new Date();
     const admin = getSupabaseAdminClient();
     const nextState = buildResumedAuctionState(room, auctionState, now);
-    const { data, error } = await admin
+    const updateValues = {
+      phase: nextState.phase,
+      expires_at: nextState.expiresAt,
+      paused_remaining_ms: null,
+      version: auctionState.version + 1,
+      last_event: nextState.lastEvent,
+    };
+    let { data, error } = await admin
       .from("auction_state")
-      .update({
-        phase: nextState.phase,
-        expires_at: nextState.expiresAt,
-        paused_remaining_ms: null,
-        version: auctionState.version + 1,
-        last_event: nextState.lastEvent,
-      })
+      .update(updateValues)
       .eq("room_id", room.id)
       .eq("version", auctionState.version)
       .select("*")
       .maybeSingle();
+
+    if (error && isMissingColumnError(error.message)) {
+      const retry = await admin
+        .from("auction_state")
+        .update(omitOptionalColumns(updateValues))
+        .eq("room_id", room.id)
+        .eq("version", auctionState.version)
+        .select("*")
+        .maybeSingle();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       throw new AppError(error.message, 500, "AUCTION_RESUME_FAILED");
@@ -46,8 +59,6 @@ export async function POST(
     if (!data) {
       throw new AppError("Auction state changed. Refresh and retry.", 409, "VERSION_CONFLICT");
     }
-
-    revalidatePath(`/auction/${room.code}`);
 
     return NextResponse.json({ resumed: true });
   } catch (error) {

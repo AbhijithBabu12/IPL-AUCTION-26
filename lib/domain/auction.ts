@@ -10,9 +10,19 @@ import type {
 
 export const BID_INCREMENTS = [1_000_000, 2_500_000, 5_000_000, 10_000_000] as const;
 
+export function shuffleItems<T>(items: T[]) {
+  const shuffled = [...items];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled;
+}
+
 export function getAllowedIncrements(currentBid: number | null): number[] {
   if (currentBid === null) return [];
-  if (currentBid >= 50_000_000) return [5_000_000, 10_000_000];
   if (currentBid >= 10_000_000) return [2_500_000, 5_000_000, 10_000_000];
   return [1_000_000, 2_500_000, 5_000_000, 10_000_000];
 }
@@ -27,7 +37,7 @@ interface BidValidationInput {
   room: Room;
   auctionState: AuctionState;
   team: Team;
-  squads: SquadEntry[];
+  teamSquadCount: number;
   now: Date;
   increment?: number;
 }
@@ -37,15 +47,13 @@ interface ResolveAuctionInput {
   auctionState: AuctionState;
   players: Player[];
   now: Date;
+  forceResolution?: boolean;
 }
 
 export function getRoundQueue(players: Player[], round: number) {
   const sorted = [...players].sort((left, right) => left.orderIndex - right.orderIndex);
-  // Round 1 goes through all players in order; subsequent rounds only include AVAILABLE players
-  // (start-next-round resets selected UNSOLD players to AVAILABLE before starting)
-  if (round === 1) {
-    return sorted;
-  }
+  // Auction order should only include players still available to be auctioned.
+  // Fresh uploads start as AVAILABLE, and imported continuation auctions can preload SOLD players.
   return sorted.filter((player) => player.status === "AVAILABLE");
 }
 
@@ -164,7 +172,7 @@ export function validateBidPlacement({
   room,
   auctionState,
   team,
-  squads,
+  teamSquadCount,
   now,
   increment,
 }: BidValidationInput) {
@@ -176,12 +184,15 @@ export function validateBidPlacement({
     throw new AppError("No player is currently on the block.", 400, "NO_ACTIVE_PLAYER");
   }
 
+  if (!auctionState.expiresAt || new Date(auctionState.expiresAt).getTime() <= now.getTime()) {
+    throw new AppError("Bidding time has ended for this player.", 400, "TIMER_EXPIRED");
+  }
+
   if (auctionState.currentTeamId === team.id) {
     throw new AppError("Highest bidder cannot bid again immediately.", 400, "DUPLICATE_BID");
   }
 
-  const squadCount = squads.filter((entry) => entry.teamId === team.id).length;
-  if (squadCount >= team.squadLimit) {
+  if (teamSquadCount >= team.squadLimit) {
     throw new AppError("Team squad is already full.", 400, "SQUAD_FULL");
   }
 
@@ -202,6 +213,7 @@ export function resolveExpiredAuction({
   auctionState,
   players,
   now,
+  forceResolution,
 }: ResolveAuctionInput) {
   if (auctionState.phase !== "LIVE") {
     throw new AppError("Only a live auction can be advanced.", 400, "INVALID_PHASE");
@@ -211,7 +223,7 @@ export function resolveExpiredAuction({
     throw new AppError("No player is currently active.", 400, "NO_ACTIVE_PLAYER");
   }
 
-  if (!auctionState.expiresAt || new Date(auctionState.expiresAt) > now) {
+  if (!forceResolution && (!auctionState.expiresAt || new Date(auctionState.expiresAt).getTime() - 2000 > now.getTime())) {
     throw new AppError("Timer has not expired yet.", 400, "TIMER_RUNNING");
   }
 

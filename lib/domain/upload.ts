@@ -7,13 +7,7 @@ function normalizeShortCode(value: string) {
   return value.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toUpperCase();
 }
 
-export function normalizeTeamRows(rows: TeamUploadRowInput[]) {
-  return rows.map((team) => ({
-    name: team.name.trim(),
-    shortCode: normalizeShortCode(team.shortCode ?? team.name),
-    ownerUserId: team.ownerUserId ?? null,
-  }));
-}
+
 
 export function normalizePlayerRows(rows: PlayerUploadRowInput[]) {
   return rows.map((player, index) => ({
@@ -22,6 +16,7 @@ export function normalizePlayerRows(rows: PlayerUploadRowInput[]) {
     nationality: player.nationality?.trim() || null,
     basePrice: player.basePrice,
     stats: player.stats ?? null,
+    currentTeamId: player.currentTeamId ?? null,
     orderIndex: index + 1,
   }));
 }

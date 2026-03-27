@@ -1,10 +1,11 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { buildStartingAuctionState } from "@/lib/domain/auction";
+import { buildStartingAuctionState, shuffleItems } from "@/lib/domain/auction";
 import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
 import { requireApiUser, syncUserProfileFromAuthUser } from "@/lib/server/auth";
+import { reorderPlayersSafely } from "@/lib/server/player-order";
 import { getRoomEntities, requireRoomAdmin } from "@/lib/server/room";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -28,13 +29,55 @@ export async function POST(
       throw new AppError("Create at least one team before starting.", 400, "NO_TEAMS");
     }
 
-    if (auctionState && auctionState.phase !== "WAITING") {
+    if (auctionState && !["WAITING", "ROUND_END", "COMPLETED"].includes(auctionState.phase)) {
       throw new AppError("Auction has already started.", 400, "AUCTION_ALREADY_STARTED");
+    }
+
+    if (auctionState && ["ROUND_END", "COMPLETED"].includes(auctionState.phase)) {
+      const { error: recycleError } = await admin
+        .from("players")
+        .update({ status: "AVAILABLE" })
+        .eq("room_id", room.id)
+        .eq("status", "UNSOLD");
+
+      if (recycleError) {
+        throw new AppError(recycleError.message, 500, "PLAYER_RESET_FAILED");
+      }
+    }
+
+    const refreshedPlayers =
+      auctionState && ["ROUND_END", "COMPLETED"].includes(auctionState.phase)
+        ? players.map((player) =>
+            player.status === "UNSOLD" ? { ...player, status: "AVAILABLE" as const } : player,
+          )
+        : players;
+
+    const availablePlayers = refreshedPlayers.filter(
+      (player) => player.status === "AVAILABLE",
+    );
+    const shuffledAvailablePlayers = shuffleItems(availablePlayers);
+
+    if (shuffledAvailablePlayers.length > 0) {
+      await reorderPlayersSafely(
+        room.id,
+        shuffledAvailablePlayers.map((player) => ({
+          id: player.id,
+          orderIndex: player.orderIndex,
+        })),
+      );
     }
 
     const nextState = buildStartingAuctionState({
       room,
-      players,
+      players: [
+        ...shuffledAvailablePlayers.map((player, index) => ({
+          ...player,
+          orderIndex: [...availablePlayers]
+            .map((availablePlayer) => availablePlayer.orderIndex)
+            .sort((left, right) => left - right)[index] ?? player.orderIndex,
+        })),
+        ...refreshedPlayers.filter((player) => player.status !== "AVAILABLE"),
+      ],
       now: new Date(),
     });
 

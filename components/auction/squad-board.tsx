@@ -21,6 +21,13 @@ async function renameTeam(
   return null;
 }
 
+async function releasePlayer(roomCode: string, entryId: string): Promise<string | null> {
+  const res = await fetch(`/api/rooms/${roomCode}/squad/${entryId}`, { method: "DELETE" });
+  const payload = (await res.json()) as { error?: string };
+  if (!res.ok) return payload.error ?? "Release failed.";
+  return null;
+}
+
 function PlayerRow({
   entry,
   player,
@@ -35,45 +42,82 @@ function PlayerRow({
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   async function handleRelease() {
-    if (!window.confirm(`Release ${player?.name ?? "this player"}? Their purchase price will be returned to the team purse.`)) return;
     setPending(true);
     const err = await releasePlayer(roomCode, entry.id);
-    if (err) setError(err);
-    else router.refresh();
+    if (err) {
+      setError(err);
+    } else {
+      setConfirmOpen(false);
+      router.refresh();
+    }
     setPending(false);
   }
 
   return (
-    <div className="squad-player-row" style={{ gap: "0.4rem" }}>
-      <span className="squad-player-name">{player?.name ?? "Unknown"}</span>
-      <span className="squad-player-role">{player?.role ?? ""}</span>
-      <span className="squad-player-price">{formatCurrencyShort(entry.purchasePrice)}</span>
-      {canRelease && (
-        <button
-          className="squad-edit-btn"
-          disabled={pending}
-          onClick={() => void handleRelease()}
-          style={{ color: "var(--danger)", opacity: 0.7 }}
-          title="Release player (return to pool)"
-          type="button"
-        >
-          ✕
-        </button>
-      )}
-      {error && (
-        <span style={{ fontSize: "0.7rem", color: "var(--danger)" }}>{error}</span>
-      )}
-    </div>
-  );
-}
+    <>
+      <div className="squad-player-row" style={{ gap: "0.4rem" }}>
+        <span className="squad-player-name">{player?.name ?? "Unknown"}</span>
+        <span className="squad-player-role">{player?.role ?? ""}</span>
+        <span className="squad-player-price">{formatCurrencyShort(entry.purchasePrice)}</span>
+        {canRelease ? (
+          <button
+            className="squad-edit-btn"
+            disabled={pending}
+            onClick={() => setConfirmOpen(true)}
+            style={{ color: "var(--danger)", opacity: 0.8 }}
+            title="Drop player"
+            type="button"
+          >
+            Drop
+          </button>
+        ) : null}
+        {error ? (
+          <span style={{ fontSize: "0.7rem", color: "var(--danger)" }}>{error}</span>
+        ) : null}
+      </div>
 
-async function releasePlayer(roomCode: string, entryId: string): Promise<string | null> {
-  const res = await fetch(`/api/rooms/${roomCode}/squad/${entryId}`, { method: "DELETE" });
-  const payload = (await res.json()) as { error?: string };
-  if (!res.ok) return payload.error ?? "Release failed.";
-  return null;
+      {confirmOpen ? (
+        <div className="app-modal-backdrop" onClick={() => setConfirmOpen(false)}>
+          <div
+            className="app-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="app-modal-head">
+              <h3 style={{ margin: 0 }}>Drop player</h3>
+            </div>
+            <p className="subtle" style={{ margin: 0, lineHeight: 1.6 }}>
+              Remove <strong style={{ color: "var(--text)" }}>{player?.name ?? "this player"}</strong> and
+              return <strong style={{ color: "var(--text)" }}>{formatCurrencyShort(entry.purchasePrice)}</strong> back
+              to the team purse?
+            </p>
+            <div className="app-modal-actions">
+              <button
+                className="button ghost"
+                disabled={pending}
+                onClick={() => setConfirmOpen(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="button danger"
+                disabled={pending}
+                onClick={() => void handleRelease()}
+                type="button"
+              >
+                {pending ? "Dropping..." : "Confirm drop"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 function TeamSection({
@@ -95,6 +139,7 @@ function TeamSection({
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [nameInput, setNameInput] = useState(team.name);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,67 +163,147 @@ function TeamSection({
   }
 
   return (
-    <div className="squad-team">
-      <div className="squad-team-header">
+    <div
+      className="squad-team"
+      style={{
+        marginBottom: "0.5rem",
+        borderRadius: "8px",
+        overflow: "hidden",
+        border: "1px solid rgba(255,255,255,0.05)",
+        background: "rgba(255,255,255,0.02)",
+      }}
+    >
+      <button
+        className="squad-team-header"
+        onClick={() => !editing && setExpanded(!expanded)}
+        style={{
+          width: "100%",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "0.75rem 1rem",
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          textAlign: "left",
+          transition: "background 0.2s",
+        }}
+        onMouseOver={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+        onMouseOut={(e) => (e.currentTarget.style.background = "transparent")}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, minWidth: 0 }}>
-          <span className="squad-shortcode">{team.shortCode}</span>
+          <span
+            className="squad-shortcode"
+            style={{
+              padding: "0.2rem 0.5rem",
+              background: "var(--primary)",
+              color: "#fff",
+              borderRadius: "4px",
+              fontSize: "0.75rem",
+              fontWeight: "bold",
+            }}
+          >
+            {team.shortCode}
+          </span>
           {editing ? (
             <input
               autoFocus
               className="input squad-rename-input"
               disabled={pending}
               value={nameInput}
+              onClick={(e) => e.stopPropagation()}
               onBlur={() => void handleRename()}
               onChange={(e) => setNameInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void handleRename();
-                if (e.key === "Escape") { setEditing(false); setNameInput(team.name); }
+                if (e.key === "Escape") {
+                  setEditing(false);
+                  setNameInput(team.name);
+                }
               }}
             />
           ) : (
-            <span className="squad-team-name" title={team.name}>{team.name}</span>
+            <span
+              className="squad-team-name"
+              title={team.name}
+              style={{ fontWeight: 600, fontSize: "0.95rem", color: "var(--text)" }}
+            >
+              {team.name}
+            </span>
           )}
-          {canRename && !isLive && !editing && (
-            <button
+          {canRename && !isLive && !editing ? (
+            <div
               className="squad-edit-btn"
               title="Rename team"
-              type="button"
-              onClick={() => { setEditing(true); setNameInput(team.name); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditing(true);
+                setNameInput(team.name);
+              }}
+              style={{ padding: "0.2rem 0.5rem", cursor: "pointer", fontSize: "0.8rem", opacity: 0.6 }}
             >
-              ✎
-            </button>
-          )}
+              Edit
+            </div>
+          ) : null}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-          <span className="subtle" style={{ fontSize: "0.78rem" }}>
-            {entries.length}/{team.squadLimit}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+          <span className="subtle" style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+            {entries.length}/{team.squadLimit} Players
           </span>
-          <span className="squad-purse">{formatCurrencyShort(team.purseRemaining)}</span>
+          <span className="squad-purse" style={{ fontWeight: "bold", color: "var(--success)" }}>
+            {formatCurrencyShort(team.purseRemaining)}
+          </span>
+          <span
+            style={{
+              fontSize: "0.8rem",
+              opacity: 0.5,
+              marginLeft: "0.2rem",
+              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s",
+            }}
+          >
+            ?
+          </span>
         </div>
-      </div>
+      </button>
+
       {error ? (
-        <div style={{ padding: "0.25rem 0.75rem", fontSize: "0.78rem", color: "var(--danger)" }}>
+        <div style={{ padding: "0.25rem 1rem", fontSize: "0.78rem", color: "var(--danger)" }}>
           {error}
         </div>
       ) : null}
-      {entries.length === 0 ? (
-        <div className="squad-empty">No players yet</div>
-      ) : (
-        <div className="squad-players">
-          {entries.map((entry) => {
-            const player = players.get(entry.playerId);
-            return (
-              <PlayerRow
-                canRelease={canRelease}
-                entry={entry}
-                key={entry.id}
-                player={player ?? null}
-                roomCode={roomCode}
-              />
-            );
-          })}
+
+      {expanded ? (
+        <div
+          style={{
+            padding: "0 1rem 0.75rem 1rem",
+            borderTop: "1px solid rgba(255,255,255,0.05)",
+            marginTop: "0.25rem",
+            paddingTop: "0.75rem",
+          }}
+        >
+          {entries.length === 0 ? (
+            <div className="squad-empty" style={{ fontSize: "0.85rem", opacity: 0.6, fontStyle: "italic" }}>
+              No players purchased yet.
+            </div>
+          ) : (
+            <div className="squad-players" style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+              {entries.map((entry) => {
+                const player = players.get(entry.playerId);
+                return (
+                  <PlayerRow
+                    canRelease={canRelease}
+                    entry={entry}
+                    key={entry.id}
+                    player={player ?? null}
+                    roomCode={roomCode}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -191,6 +316,7 @@ export function SquadBoard({
   phase,
   currentUserId,
   isAdmin = false,
+  scrollable = true,
 }: {
   teams: Team[];
   squads: SquadEntry[];
@@ -199,18 +325,22 @@ export function SquadBoard({
   phase: AuctionPhase;
   currentUserId: string | null;
   isAdmin?: boolean;
+  scrollable?: boolean;
 }) {
   const playerById = new Map(players.map((p) => [p.id, p]));
 
   return (
     <div className="panel squad-board-panel">
       <h2>Squads</h2>
-      <div className="squad-board">
+      <div
+        className="squad-board"
+        style={scrollable ? undefined : { maxHeight: "none", overflowY: "visible" }}
+      >
         {teams.map((team) => {
           const entries = squads.filter((s) => s.teamId === team.id);
           const isOwner = currentUserId !== null && team.ownerUserId === currentUserId;
           const canRename = isOwner;
-          const canRelease = isAdmin || isOwner;
+          const canRelease = isAdmin;
 
           return (
             <TeamSection

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { SiteLogo } from "@/components/site-logo";
 
 import {
   getLoginAuthErrorMessage,
@@ -9,7 +10,6 @@ import {
   signInWithPasswordAction,
   signUpWithPasswordAction,
 } from "@/app/login/actions";
-import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { hasBrowserSupabaseEnv, hasServiceRoleEnv } from "@/lib/config";
 import { getSessionUser } from "@/lib/server/auth";
 
@@ -37,30 +37,24 @@ export default async function LoginPage({
   return (
     <main className="shell">
       <div className="nav">
-        <div className="brand">IPL Auction Platform</div>
+        <div className="brand"><SiteLogo suffix="Login" /></div>
       </div>
 
       <section className="hero">
-        <span className="eyebrow">Authentication</span>
-        <h1>Sign in with Google or use a temporary email/password fallback.</h1>
+        <span className="eyebrow">Welcome</span>
+        <h1>Sign in or create your SFL account.</h1>
         <p className="subtle">
-          Use the credential path while the Google provider is offline, then head
-          into the lobby to create rooms, join by code, upload rosters, and run
-          the auction workflow.
+          Join St. Thomas Fantasy League, enter your room, build your IPL squad,
+          and take part in the auction.
         </p>
         {!hasBrowserSupabaseEnv ? (
           <div className="notice warning">
-            Configure the Supabase browser values in{" "}
-            <span className="mono">.env.local</span> before any auth method will
-            work.
+            Sign in is not ready yet. Please finish the app setup first.
           </div>
         ) : null}
         {hasBrowserSupabaseEnv && !hasServiceRoleEnv ? (
           <div className="notice warning">
-            Email/password login will work, but add{" "}
-            <span className="mono">SUPABASE_SERVICE_ROLE_KEY</span> to{" "}
-            <span className="mono">.env.local</span> before creating rooms,
-            uploading rosters, bidding, and using the full server-side workflow.
+            Sign in is ready, but some room features are still being set up.
           </div>
         ) : null}
         {authError ? <div className="notice warning">{authError}</div> : null}
@@ -72,9 +66,9 @@ export default async function LoginPage({
           <form action={signInWithPasswordAction} className="panel form-grid">
             <input type="hidden" name="next" value={next} />
             <div>
-              <h2>Sign in with email</h2>
+              <h2>Sign in</h2>
               <p className="subtle">
-                Temporary fallback while Google auth is unavailable.
+                Use your email and password to enter SFL.
               </p>
             </div>
             <div className="field">
@@ -100,17 +94,16 @@ export default async function LoginPage({
               />
             </div>
             <button className="button secondary" type="submit">
-              Sign in with password
+              Sign in
             </button>
           </form>
 
           <form action={signUpWithPasswordAction} className="panel form-grid">
             <input type="hidden" name="next" value={next} />
             <div>
-              <h2>Create a fallback account</h2>
+              <h2>Create an account</h2>
               <p className="subtle">
-                This creates a Supabase email/password user and stores your display
-                name as the in-app username.
+                Create your account and choose the name you want to use inside SFL.
               </p>
             </div>
             <div className="field">
@@ -153,17 +146,6 @@ export default async function LoginPage({
           </form>
         </section>
       ) : null}
-
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h2>Continue with Google</h2>
-        <p className="subtle">
-          Keep this path for later once the Google provider is enabled again in
-          Supabase Auth.
-        </p>
-        <div className="button-row">
-          <GoogleSignInButton next={next} />
-        </div>
-      </section>
     </main>
   );
 }

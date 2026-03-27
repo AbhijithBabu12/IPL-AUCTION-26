@@ -5,7 +5,30 @@ import { useState } from "react";
 import type { ChangeEvent } from "react";
 import * as XLSX from "xlsx";
 
-import { toErrorMessage } from "@/lib/utils";
+import { parseAmountInput, toErrorMessage } from "@/lib/utils";
+
+const ROLE_OPTIONS = [
+  "Batsman",
+  "Bowler",
+  "All-Rounder",
+  "Wicketkeeper",
+];
+
+type ManualPlayerDraft = {
+  name: string;
+  role: string;
+  basePrice: string;
+  teamName: string;
+};
+
+function createEmptyManualPlayer(): ManualPlayerDraft {
+  return {
+    name: "",
+    role: "",
+    basePrice: "",
+    teamName: "",
+  };
+}
 
 async function readTabularRows(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase();
@@ -83,6 +106,7 @@ function normalizePlayers(rows: Record<string, unknown>[]) {
         nationality: nationality ? String(nationality).trim() : null,
         basePrice: Number.isFinite(parsedBasePrice) ? parsedBasePrice : 0,
         stats: Object.keys(stats).length > 0 ? stats : null,
+        currentTeamId: null as string | null,
       };
     })
     .filter((player) => player.name && player.role);
@@ -95,9 +119,12 @@ export function UploadPlayersForm({
   roomCode: string;
   defaultPlayerCount: number;
 }) {
-  const [pendingAction, setPendingAction] = useState<"upload" | "default" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"upload" | "default" | "manual" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [manualPlayers, setManualPlayers] = useState<ManualPlayerDraft[]>([
+    createEmptyManualPlayer(),
+  ]);
 
   const pending = pendingAction !== null;
 
@@ -127,6 +154,73 @@ export function UploadPlayersForm({
 
     setMessage(`Imported ${payload.imported ?? players.length} players.`);
     refreshRoomPage();
+  }
+
+  async function handleManualAdd() {
+    const filledPlayers = manualPlayers.filter(
+      (player) =>
+        player.name.trim() ||
+        player.role.trim() ||
+        player.basePrice.trim() ||
+        player.teamName.trim(),
+    );
+
+    if (filledPlayers.length === 0) {
+      setError("Add at least one player name, role, and price.");
+      return;
+    }
+
+    setPendingAction("manual");
+    setMessage(null);
+    setError(null);
+
+    try {
+      const players = filledPlayers.map((player, index) => {
+        if (!player.name.trim() || !player.role.trim() || !player.basePrice.trim()) {
+          throw new Error(`Complete name, role, and price for player ${index + 1}.`);
+        }
+
+        return {
+          name: player.name.trim(),
+          role: player.role.trim(),
+          nationality: null,
+          basePrice: parseAmountInput(player.basePrice),
+          stats: player.teamName.trim() ? { iplTeam: player.teamName.trim() } : null,
+          currentTeamId: null,
+        };
+      });
+
+      await importPlayers(players);
+      setManualPlayers([createEmptyManualPlayer()]);
+    } catch (manualError) {
+      setError(toErrorMessage(manualError));
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  function updateManualPlayer(
+    index: number,
+    key: keyof ManualPlayerDraft,
+    value: string,
+  ) {
+    setManualPlayers((current) =>
+      current.map((player, playerIndex) =>
+        playerIndex === index ? { ...player, [key]: value } : player,
+      ),
+    );
+  }
+
+  function addManualPlayerRow() {
+    setManualPlayers((current) => [...current, createEmptyManualPlayer()]);
+  }
+
+  function removeManualPlayerRow(index: number) {
+    setManualPlayers((current) =>
+      current.length === 1
+        ? [createEmptyManualPlayer()]
+        : current.filter((_, playerIndex) => playerIndex !== index),
+    );
   }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
@@ -184,6 +278,102 @@ export function UploadPlayersForm({
 
   return (
     <div className="form-grid">
+      <div
+        className="panel"
+        style={{ padding: "0.9rem", background: "rgba(255,255,255,0.03)", borderColor: "rgba(99,102,241,0.16)" }}
+      >
+        <div style={{ display: "grid", gap: "0.75rem" }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Add player manually</h3>
+            <p className="subtle" style={{ margin: "0.3rem 0 0" }}>
+              Add multiple players directly into the available auction list.
+            </p>
+          </div>
+          <div style={{ display: "grid", gap: "0.75rem" }}>
+            {manualPlayers.map((player, index) => (
+              <div
+                key={`manual-player-${index}`}
+                style={{
+                  display: "grid",
+                  gap: "0.65rem",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr)) auto",
+                  alignItems: "center",
+                  padding: "0.75rem",
+                  borderRadius: "18px",
+                  border: "1px solid rgba(99,102,241,0.14)",
+                  background: "rgba(255,255,255,0.02)",
+                }}
+              >
+                <input
+                  className="input"
+                  disabled={pending}
+                  onChange={(event) => updateManualPlayer(index, "name", event.target.value)}
+                  placeholder={`Player ${index + 1} name`}
+                  type="text"
+                  value={player.name}
+                />
+                <select
+                  className="select"
+                  disabled={pending}
+                  onChange={(event) => updateManualPlayer(index, "role", event.target.value)}
+                  value={player.role}
+                >
+                  <option value="">Select role</option>
+                  {ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="input"
+                  disabled={pending}
+                  onChange={(event) => updateManualPlayer(index, "basePrice", event.target.value)}
+                  placeholder="Base price like 25L, 1Cr, 500K"
+                  type="text"
+                  value={player.basePrice}
+                />
+                <input
+                  className="input"
+                  disabled={pending}
+                  onChange={(event) => updateManualPlayer(index, "teamName", event.target.value)}
+                  placeholder="Current cricket team (optional)"
+                  type="text"
+                  value={player.teamName}
+                />
+                <button
+                  className="button ghost"
+                  disabled={pending}
+                  onClick={() => removeManualPlayerRow(index)}
+                  style={{ minWidth: "unset", paddingInline: "1rem" }}
+                  type="button"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="pill-row" style={{ marginTop: "-0.1rem" }}>
+            <button
+              className="button secondary"
+              disabled={pending}
+              onClick={addManualPlayerRow}
+              type="button"
+            >
+              Add another row
+            </button>
+          </div>
+          <button
+            className="button"
+            disabled={pending}
+            onClick={() => void handleManualAdd()}
+            type="button"
+          >
+            {pendingAction === "manual" ? "Adding players..." : "Add players"}
+          </button>
+        </div>
+      </div>
+
       <div className="field">
         <label htmlFor="players-upload">Players CSV/XLSX</label>
         <input

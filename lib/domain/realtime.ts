@@ -8,6 +8,7 @@ export const ROOM_EVENTS = {
   roundChanged: "ROUND_CHANGED",
   tradeExecuted: "TRADE_EXECUTED",
   emoji: "EMOJI_REACTION",
+  chatMessage: "CHAT_MESSAGE",
 } as const;
 
 export function getRoomChannelName(roomCode: string) {
