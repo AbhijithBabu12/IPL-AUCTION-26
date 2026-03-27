@@ -26,33 +26,43 @@ export default function IntroSplash() {
 
   return (
     <div className="sfl-intro" data-phase={phase} aria-hidden="true">
+      <div className="sfl-intro-ambient sfl-intro-ambient-left" />
+      <div className="sfl-intro-ambient sfl-intro-ambient-right" />
+      <div className="sfl-intro-grid" />
       <div className="sfl-intro-grain" />
       <div className="sfl-intro-scanline" />
+      <div className="sfl-intro-streak sfl-intro-streak-one" />
+      <div className="sfl-intro-streak sfl-intro-streak-two" />
 
-      <div className="sfl-intro-logo-wrap">
-        <div className="sfl-intro-shockwave" />
-        <div className="sfl-intro-orbit" />
-        <div className="sfl-intro-disc">
-          <Image
-            src={sflLogo}
-            alt="SFL"
-            width={140}
-            height={140}
-            priority
-            className="sfl-intro-img"
-          />
-        </div>
-        <div className="sfl-intro-flare" />
-      </div>
+      <div className="sfl-intro-stage">
+        <div className="sfl-intro-kicker">Fantasy auction broadcast</div>
 
-      <div className="sfl-intro-text">
-        <div className="sfl-intro-wordmark">
-          <span>S</span>
-          <span>F</span>
-          <span>L</span>
+        <div className="sfl-intro-logo-wrap">
+          <div className="sfl-intro-shockwave" />
+          <div className="sfl-intro-orbit" />
+          <div className="sfl-intro-logo-plate" />
+          <div className="sfl-intro-disc">
+            <Image
+              src={sflLogo}
+              alt="SFL"
+              width={140}
+              height={140}
+              priority
+              className="sfl-intro-img"
+            />
+          </div>
+          <div className="sfl-intro-flare" />
         </div>
-        <div className="sfl-intro-tagline">St. Thomas Fantasy League</div>
-        <div className="sfl-intro-edition">AUCTION PLATFORM - 2026</div>
+
+        <div className="sfl-intro-text">
+          <div className="sfl-intro-wordmark">
+            <span>S</span>
+            <span>F</span>
+            <span>L</span>
+          </div>
+          <div className="sfl-intro-tagline">St. Thomas Fantasy League</div>
+          <div className="sfl-intro-edition">Auction platform 2026</div>
+        </div>
       </div>
 
       <div className="sfl-intro-rule" />
