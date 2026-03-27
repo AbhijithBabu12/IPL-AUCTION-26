@@ -1,50 +1,33 @@
+/**
+ * POST /api/rooms/[code]/cricsheet-sync
+ *
+ * Parses a Cricsheet IPL ZIP (uploaded or fetched from cricsheet.org) and
+ * upserts ONE row per match into the `match_results` table with:
+ *   source    = "cricsheet"
+ *   accepted  = false  (admin must accept via the webscrape-accept route)
+ *
+ * This allows the admin to review individual Cricsheet match data alongside
+ * webscrape data and accept the best source per match — exactly the same
+ * workflow as the existing webscrape comparison UI.
+ *
+ * The webscrape-accept route already aggregates ALL accepted rows (any source)
+ * and writes the totals to players.stats, so no further work is needed here.
+ *
+ * Body (JSON):  { season?: string }
+ * Body (form):  multipart/form-data with fields file (ZIP) and season
+ */
+
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
 import { requireApiUser } from "@/lib/server/auth";
-import { processZip, type CricsheetAccumulator } from "@/lib/server/cricsheet";
+import { processZipPerMatch } from "@/lib/server/cricsheet";
 import { requireRoomAdmin } from "@/lib/server/room";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
-
-// ── Name normalisation for matching ──────────────────────────────────────────
-
-function normaliseName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\./g, "") // remove dots (M.S. → MS)
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Return the Cricsheet accumulator that best matches a DB player name. */
-function findMatch(
-  dbName: string,
-  normalised: Map<string, string>, // normalised → original cricsheet name
-  stats: Map<string, CricsheetAccumulator>,
-): CricsheetAccumulator | null {
-  const key = normaliseName(dbName);
-
-  // 1 – exact normalised match
-  const exact = normalised.get(key);
-  if (exact) return stats.get(exact) ?? null;
-
-  // 2 – last-word (surname) match, but only if unambiguous
-  const surname = key.split(" ").pop() ?? "";
-  if (surname.length >= 3) {
-    const hits = Array.from(normalised.entries()).filter(([k]) =>
-      k.split(" ").pop() === surname,
-    );
-    if (hits.length === 1) return stats.get(hits[0]![1]) ?? null;
-  }
-
-  return null;
-}
-
-// ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function POST(
   request: Request,
@@ -100,9 +83,9 @@ export async function POST(
       zipBuffer = Buffer.from(await fetchRes.arrayBuffer());
     }
 
-    // ── Parse ZIP ─────────────────────────────────────────────────────────────
-    const { stats: cricsheetStats, matchesProcessed, matchesSkipped, seasons } =
-      processZip(zipBuffer, season);
+    // ── Parse ZIP into per-match records ──────────────────────────────────────
+    const { matches, matchesProcessed, matchesSkipped, seasons } =
+      processZipPerMatch(zipBuffer, season);
 
     if (matchesProcessed === 0) {
       return NextResponse.json(
@@ -117,70 +100,52 @@ export async function POST(
       );
     }
 
-    // ── Build normalised lookup ───────────────────────────────────────────────
-    const normalisedToOriginal = new Map<string, string>();
-    for (const name of cricsheetStats.keys()) {
-      normalisedToOriginal.set(normaliseName(name), name);
-    }
+    // ── Upsert each match into match_results ──────────────────────────────────
+    // We upsert (not just insert) so re-running the sync updates stale rows.
+    // accepted is NOT changed for existing rows — if the admin already accepted
+    // a cricsheet row we preserve that decision.
+    let upserted = 0;
+    let upsertErrors = 0;
 
-    // ── Fetch room players ────────────────────────────────────────────────────
-    const { data: players, error: playersErr } = await admin
-      .from("players")
-      .select("id, name, stats")
-      .eq("room_id", room.id);
+    for (const m of matches) {
+      // Check if there's already a row for this match+source — if it is already
+      // accepted, we update the player_stats but keep accepted=true.
+      const { data: existing } = await admin
+        .from("match_results")
+        .select("id, accepted")
+        .eq("room_id", room.id)
+        .eq("match_id", m.matchId)
+        .eq("source", "cricsheet")
+        .eq("season", m.season || season)
+        .maybeSingle();
 
-    if (playersErr) throw new AppError(playersErr.message, 500, "DB_QUERY_FAILED");
-
-    // ── Match & update ────────────────────────────────────────────────────────
-    let matched = 0;
-    const unmatchedNames: string[] = [];
-
-    for (const player of players ?? []) {
-      const playerName = String(player.name);
-      const cs = findMatch(playerName, normalisedToOriginal, cricsheetStats);
-
-      if (!cs) {
-        unmatchedNames.push(playerName);
-        continue;
-      }
-
-      // Preserve existing metadata (ipl_team, etc.) and overlay Cricsheet stats
-      const existingStats = (player.stats ?? {}) as Record<string, unknown>;
-      const newStats: Record<string, unknown> = {
-        ...existingStats,
-        // Spread all Cricsheet fields
-        runs: cs.runs,
-        balls_faced: cs.balls_faced,
-        fours: cs.fours,
-        sixes: cs.sixes,
-        ducks: cs.ducks,
-        wickets: cs.wickets,
-        balls_bowled: cs.balls_bowled,
-        runs_conceded: cs.runs_conceded,
-        dot_balls: cs.dot_balls,
-        maiden_overs: cs.maiden_overs,
-        lbw_bowled_wickets: cs.lbw_bowled_wickets,
-        catches: cs.catches,
-        stumpings: cs.stumpings,
-        run_outs_direct: cs.run_outs_direct,
-        run_outs_indirect: cs.run_outs_indirect,
-        milestone_runs_pts: cs.milestone_runs_pts,
-        milestone_wkts_pts: cs.milestone_wkts_pts,
-        sr_pts: cs.sr_pts,
-        economy_pts: cs.economy_pts,
-        catch_bonus_pts: cs.catch_bonus_pts,
-        lineup_appearances: cs.lineup_appearances,
-        substitute_appearances: cs.substitute_appearances,
-        matches_played: cs.matches_played,
-        cricsheet_name: cs.cricsheet_name ?? normalisedToOriginal.get(normaliseName(playerName)),
+      const row = {
+        room_id: room.id,
+        match_id: m.matchId,
+        source: "cricsheet" as const,
+        season: m.season || season,
+        match_date: m.matchDate,
+        player_stats: m.playerStats as unknown as Record<string, unknown>,
+        // Only set accepted=false on brand-new rows; preserve existing decisions
+        ...(existing ? {} : { accepted: false }),
       };
 
-      await admin
-        .from("players")
-        .update({ stats: newStats })
-        .eq("id", player.id as string);
+      const { error } = existing
+        ? await admin
+            .from("match_results")
+            .update({
+              match_date: m.matchDate,
+              player_stats: m.playerStats as unknown as Record<string, unknown>,
+            })
+            .eq("id", existing.id as string)
+        : await admin.from("match_results").insert(row);
 
-      matched += 1;
+      if (error) {
+        console.error(`cricsheet-sync: failed to upsert match ${m.matchId}:`, error.message);
+        upsertErrors += 1;
+      } else {
+        upserted += 1;
+      }
     }
 
     revalidatePath(`/room/${room.code}`);
@@ -192,9 +157,11 @@ export async function POST(
       seasons,
       matchesProcessed,
       matchesSkipped,
-      playersMatched: matched,
-      playersUnmatched: unmatchedNames.length,
-      unmatchedNames: unmatchedNames.slice(0, 30),
+      matchesUpserted: upserted,
+      matchesErrored: upsertErrors,
+      message:
+        `Cricsheet data stored as pending match_results rows. ` +
+        `Use the match review UI to accept individual matches and update player scores.`,
     });
   } catch (error) {
     return handleRouteError(error);
