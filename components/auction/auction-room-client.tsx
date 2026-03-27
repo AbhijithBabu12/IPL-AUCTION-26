@@ -562,9 +562,14 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         `/api/rooms/${snapshot.room.code}/auction/end-round`,
         { method: "POST" },
       );
-      const payload = (await res.json()) as { error?: string };
+      const payload = (await res.json()) as { error?: string; phase?: string };
       if (!res.ok) throw new Error(payload.error ?? "Failed to end round.");
       setEndRoundConfirmOpen(false);
+      if (payload.phase === "COMPLETED") {
+        router.push(`/room/${snapshot.room.code}`);
+        router.refresh();
+        return;
+      }
       channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
       refreshRoom();
     } catch (err) {
@@ -1302,14 +1307,8 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   </button>
                   <button
                     className="button danger"
-                    disabled={nextRoundPending}
-                    onClick={() =>
-                      void runControlAction(
-                        `/api/rooms/${snapshot.room.code}/auction/end-round`,
-                        "COMPLETED",
-                        setNextRoundPending,
-                      )
-                    }
+                    disabled={nextRoundPending || endRoundPending}
+                    onClick={() => setEndRoundConfirmOpen(true)}
                     type="button"
                   >
                     Complete auction

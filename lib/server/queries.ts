@@ -44,13 +44,14 @@ export async function getLobbySnapshot(
     };
   }
 
-  const [{ data: roomRows }, { data: teamRows }, { data: memberRows }] =
+  const [{ data: roomRows }, { data: teamRows }, { data: memberRows }, { data: auctionRows }] =
     await Promise.all([
       admin.from("rooms").select("*").in("id", roomIds).order("created_at", {
         ascending: false,
       }),
       admin.from("teams").select("room_id, id").in("room_id", roomIds),
       admin.from("room_members").select("room_id").in("room_id", roomIds),
+      admin.from("auction_state").select("room_id, phase").in("room_id", roomIds),
     ]);
 
   const membershipByRoomId = new Map(
@@ -75,6 +76,11 @@ export async function getLobbySnapshot(
     teamCountByRoomId.set(roomId, (teamCountByRoomId.get(roomId) ?? 0) + 1);
   }
 
+  const auctionPhaseByRoomId = new Map<string, string>();
+  for (const row of auctionRows ?? []) {
+    auctionPhaseByRoomId.set(String(row.room_id), String(row.phase ?? "WAITING"));
+  }
+
   return {
     user,
     rooms: (roomRows ?? []).map((row) => {
@@ -90,6 +96,9 @@ export async function getLobbySnapshot(
         teamCount: teamCountByRoomId.get(room.id) ?? 0,
         isAdmin: membership.isAdmin,
         isPlayer: membership.isPlayer,
+        auctionPhase:
+          (auctionPhaseByRoomId.get(room.id) as "WAITING" | "LIVE" | "PAUSED" | "ROUND_END" | "COMPLETED" | undefined) ??
+          "WAITING",
       };
     }),
     hasSupabase: true,

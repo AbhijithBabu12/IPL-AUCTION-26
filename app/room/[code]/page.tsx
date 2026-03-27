@@ -134,6 +134,11 @@ export default async function RoomPage({
             Increment
           </div>
         </div>
+        {snapshot.auctionState?.phase === "COMPLETED" ? (
+          <div className="notice success" style={{ marginTop: "1rem" }}>
+            Auction complete. Start auction again whenever you want to reopen the room.
+          </div>
+        ) : null}
       </section>
 
       {snapshot.currentMember.isAdmin ? (

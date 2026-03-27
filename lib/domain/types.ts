@@ -126,6 +126,7 @@ export interface RoomSummary {
   teamCount: number;
   isAdmin: boolean;
   isPlayer: boolean;
+  auctionPhase: AuctionPhase | "WAITING";
 }
 
 export interface LobbySnapshot {

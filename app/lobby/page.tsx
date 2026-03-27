@@ -133,6 +133,18 @@ export default async function LobbyPage() {
                         isPlayer: summary.isPlayer,
                       })}
                     </span>
+                    {summary.auctionPhase === "COMPLETED" ? (
+                      <span
+                        className="pill"
+                        style={{
+                          color: "#fcd34d",
+                          borderColor: "rgba(245,158,11,0.28)",
+                          background: "rgba(245,158,11,0.08)",
+                        }}
+                      >
+                        Auction complete
+                      </span>
+                    ) : null}
                     <span className="pill highlight">
                       {formatCurrency(summary.room.purse)}
                     </span>
