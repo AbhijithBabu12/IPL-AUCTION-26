@@ -7,6 +7,7 @@ import { startNextRoundSchema } from "@/lib/domain/schemas";
 import { readJson, handleRouteError } from "@/lib/server/api";
 import { isMissingColumnError, omitOptionalColumns } from "@/lib/server/auction-state";
 import { requireApiUser } from "@/lib/server/auth";
+import { reorderPlayersSafely } from "@/lib/server/player-order";
 import { getAuctionStateOnly, requireRoomAdmin } from "@/lib/server/room";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -35,7 +36,7 @@ export async function POST(
 
     const { data: selectedPlayers, error: selectedPlayersError } = await admin
       .from("players")
-      .select("id")
+      .select("id, order_index")
       .eq("room_id", room.id)
       .in("id", playerIds);
 
@@ -44,20 +45,13 @@ export async function POST(
     }
 
     const shuffledSelectedPlayers = shuffleItems(selectedPlayers ?? []);
-    const reorderedResults = await Promise.all(
-      shuffledSelectedPlayers.map((player, index) =>
-        admin
-          .from("players")
-          .update({ order_index: index + 1 })
-          .eq("id", player.id)
-          .eq("room_id", room.id),
-      ),
+    await reorderPlayersSafely(
+      room.id,
+      shuffledSelectedPlayers.map((player) => ({
+        id: String(player.id),
+        orderIndex: Number(player.order_index),
+      })),
     );
-    const reorderError = reorderedResults.find((result) => result.error)?.error ?? null;
-
-    if (reorderError) {
-      throw new AppError(reorderError.message, 500, "PLAYER_REORDER_FAILED");
-    }
 
     // Reset selected players back to AVAILABLE
     const { error: playerError } = await admin

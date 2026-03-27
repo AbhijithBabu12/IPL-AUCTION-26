@@ -5,6 +5,7 @@ import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
 import { isMissingColumnError, omitOptionalColumns } from "@/lib/server/auction-state";
 import { requireApiUser } from "@/lib/server/auth";
+import { reorderPlayersSafely } from "@/lib/server/player-order";
 import { getRoomEntities, requireRoomAdmin } from "@/lib/server/room";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -132,20 +133,13 @@ export async function POST(
 
     if (!resolution.nextPlayerId && unsoldPlayers.length > 0) {
       const shuffledUnsoldPlayers = shuffleItems(unsoldPlayers);
-      const orderResults = await Promise.all(
-        shuffledUnsoldPlayers.map((player, index) =>
-          admin
-            .from("players")
-            .update({ order_index: index + 1 })
-            .eq("id", player.id)
-            .eq("room_id", room.id),
-        ),
+      await reorderPlayersSafely(
+        room.id,
+        shuffledUnsoldPlayers.map((player) => ({
+          id: player.id,
+          orderIndex: player.orderIndex,
+        })),
       );
-      const orderError = orderResults.find((result) => result.error)?.error ?? null;
-
-      if (orderError) {
-        throw new AppError(orderError.message, 500, "ROUND_REORDER_FAILED");
-      }
 
       const { error: recycleError } = await admin
         .from("players")

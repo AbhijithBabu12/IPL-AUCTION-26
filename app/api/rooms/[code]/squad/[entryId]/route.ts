@@ -73,6 +73,7 @@ export async function DELETE(
       .eq("id", entry.player_id)
       .eq("room_id", room.id);
 
+    revalidatePath(`/room/${room.code}`);
     revalidatePath(`/auction/${room.code}`);
     revalidatePath(`/results/${room.code}`);
 

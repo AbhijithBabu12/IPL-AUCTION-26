@@ -2,6 +2,7 @@
 import { SiteLogo } from "@/components/site-logo";
 
 import { ImportResultsForm } from "@/components/room/import-results-form";
+import { MyTeamPanel } from "@/components/room/my-team-panel";
 import { ReadinessPanel } from "@/components/room/readiness-panel";
 import { RoomInvitePanel } from "@/components/room/room-invite-panel";
 import { StartAuctionButton } from "@/components/room/start-auction-button";
@@ -61,12 +62,6 @@ export default async function RoomPage({
     );
   }
 
-  const summaryButtonStyle = {
-    outline: "none",
-    listStyle: "none",
-    display: "block",
-    cursor: "pointer",
-  } as const;
   const soldShowcaseItems = snapshot.squads
     .map((entry) => {
       const player = snapshot.players.find((item) => item.id === entry.playerId);
@@ -190,31 +185,13 @@ export default async function RoomPage({
                   const myTeam = snapshot.teams.find((t) => t.ownerUserId === user.id);
                   if (myTeam) {
                     return (
-                      <details className="room-card" style={{ marginTop: "0.5rem", cursor: "pointer", borderColor: "rgba(251,191,36,0.15)" }}>
-                        <summary style={summaryButtonStyle}>
-                          <strong>{myTeam.name}</strong>
-                          <div className="subtle mono">{myTeam.shortCode}</div>
-                          <div className="pill-row" style={{ marginTop: "0.5rem" }}>
-                            <span className="pill highlight">{formatCurrencyShort(myTeam.purseRemaining)}</span>
-                            <span className="pill">Squad limit: {myTeam.squadLimit}</span>
-                          </div>
-                        </summary>
-                        <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)", display: "grid", gap: "0.5rem" }}>
-                          {snapshot.squads.filter(s => s.teamId === myTeam.id).length === 0 ? (
-                            <div className="subtle" style={{ fontSize: "0.9rem" }}>No players bought yet.</div>
-                          ) : (
-                            snapshot.squads.filter(s => s.teamId === myTeam.id).map(s => {
-                              const p = snapshot.players.find(x => x.id === s.playerId);
-                              return (
-                                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
-                                  <span>{p?.name} <span className="subtle" style={{ fontSize: "0.8rem" }}>{p?.role}</span></span>
-                                  <strong style={{ color: "var(--primary-strong)" }}>{formatCurrencyShort(s.purchasePrice)}</strong>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </details>
+                      <MyTeamPanel
+                        isAdmin
+                        players={snapshot.players}
+                        roomCode={snapshot.room.code}
+                        squads={snapshot.squads}
+                        team={myTeam}
+                      />
                     );
                   }
                 return (
@@ -232,31 +209,13 @@ export default async function RoomPage({
                 const myTeam = snapshot.teams.find((t) => t.ownerUserId === user.id);
                 if (myTeam) {
                   return (
-                    <details className="room-card" style={{ marginTop: "0.5rem", cursor: "pointer" }}>
-                      <summary style={summaryButtonStyle}>
-                        <strong>{myTeam.name}</strong>
-                        <div className="subtle mono">{myTeam.shortCode}</div>
-                        <div className="pill-row" style={{ marginTop: "0.5rem" }}>
-                          <span className="pill highlight">{formatCurrencyShort(myTeam.purseRemaining)}</span>
-                          <span className="pill">Squad limit: {myTeam.squadLimit}</span>
-                        </div>
-                      </summary>
-                      <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid var(--border)", display: "grid", gap: "0.5rem" }}>
-                        {snapshot.squads.filter(s => s.teamId === myTeam.id).length === 0 ? (
-                          <div className="subtle" style={{ fontSize: "0.9rem" }}>No players bought yet.</div>
-                        ) : (
-                          snapshot.squads.filter(s => s.teamId === myTeam.id).map(s => {
-                            const p = snapshot.players.find(x => x.id === s.playerId);
-                            return (
-                              <div key={s.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.9rem" }}>
-                                <span>{p?.name} <span className="subtle" style={{fontSize:"0.8rem"}}>{p?.role}</span></span>
-                                <strong>{formatCurrencyShort(s.purchasePrice)}</strong>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </details>
+                    <MyTeamPanel
+                      isAdmin={false}
+                      players={snapshot.players}
+                      roomCode={snapshot.room.code}
+                      squads={snapshot.squads}
+                      team={myTeam}
+                    />
                   );
                 }
                 return (

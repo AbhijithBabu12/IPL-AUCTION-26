@@ -5,6 +5,7 @@ import { buildStartingAuctionState, shuffleItems } from "@/lib/domain/auction";
 import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
 import { requireApiUser, syncUserProfileFromAuthUser } from "@/lib/server/auth";
+import { reorderPlayersSafely } from "@/lib/server/player-order";
 import { getRoomEntities, requireRoomAdmin } from "@/lib/server/room";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -57,21 +58,13 @@ export async function POST(
     const shuffledAvailablePlayers = shuffleItems(availablePlayers);
 
     if (shuffledAvailablePlayers.length > 0) {
-      const { error: orderError } = await Promise.all(
-        shuffledAvailablePlayers.map((player, index) =>
-          admin
-            .from("players")
-            .update({ order_index: index + 1 })
-            .eq("id", player.id)
-            .eq("room_id", room.id),
-        ),
-      ).then((results) => ({
-        error: results.find((result) => result.error)?.error ?? null,
-      }));
-
-      if (orderError) {
-        throw new AppError(orderError.message, 500, "PLAYER_REORDER_FAILED");
-      }
+      await reorderPlayersSafely(
+        room.id,
+        shuffledAvailablePlayers.map((player) => ({
+          id: player.id,
+          orderIndex: player.orderIndex,
+        })),
+      );
     }
 
     const nextState = buildStartingAuctionState({
@@ -79,7 +72,9 @@ export async function POST(
       players: [
         ...shuffledAvailablePlayers.map((player, index) => ({
           ...player,
-          orderIndex: index + 1,
+          orderIndex: [...availablePlayers]
+            .map((availablePlayer) => availablePlayer.orderIndex)
+            .sort((left, right) => left - right)[index] ?? player.orderIndex,
         })),
         ...refreshedPlayers.filter((player) => player.status !== "AVAILABLE"),
       ],
