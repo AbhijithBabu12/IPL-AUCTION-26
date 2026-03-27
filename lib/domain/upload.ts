@@ -16,6 +16,7 @@ export function normalizePlayerRows(rows: PlayerUploadRowInput[]) {
     nationality: player.nationality?.trim() || null,
     basePrice: player.basePrice,
     stats: player.stats ?? null,
+    currentTeamId: player.currentTeamId ?? null,
     orderIndex: index + 1,
   }));
 }

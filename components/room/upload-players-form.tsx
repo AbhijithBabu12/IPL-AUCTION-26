@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { ChangeEvent } from "react";
 import * as XLSX from "xlsx";
 
+import type { Team } from "@/lib/domain/types";
 import { toErrorMessage } from "@/lib/utils";
 
 async function readTabularRows(file: File) {
@@ -83,6 +84,7 @@ function normalizePlayers(rows: Record<string, unknown>[]) {
         nationality: nationality ? String(nationality).trim() : null,
         basePrice: Number.isFinite(parsedBasePrice) ? parsedBasePrice : 0,
         stats: Object.keys(stats).length > 0 ? stats : null,
+        currentTeamId: null as string | null,
       };
     })
     .filter((player) => player.name && player.role);
@@ -91,13 +93,21 @@ function normalizePlayers(rows: Record<string, unknown>[]) {
 export function UploadPlayersForm({
   roomCode,
   defaultPlayerCount,
+  teams,
 }: {
   roomCode: string;
   defaultPlayerCount: number;
+  teams: Team[];
 }) {
-  const [pendingAction, setPendingAction] = useState<"upload" | "default" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"upload" | "default" | "manual" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [manualPlayer, setManualPlayer] = useState({
+    name: "",
+    role: "",
+    basePrice: "",
+    currentTeamId: "",
+  });
 
   const pending = pendingAction !== null;
 
@@ -127,6 +137,40 @@ export function UploadPlayersForm({
 
     setMessage(`Imported ${payload.imported ?? players.length} players.`);
     refreshRoomPage();
+  }
+
+  async function handleManualAdd() {
+    if (!manualPlayer.name.trim() || !manualPlayer.role.trim() || !manualPlayer.basePrice.trim()) {
+      setError("Enter the player name, role, and price.");
+      return;
+    }
+
+    setPendingAction("manual");
+    setMessage(null);
+    setError(null);
+
+    try {
+      await importPlayers([
+        {
+          name: manualPlayer.name.trim(),
+          role: manualPlayer.role.trim(),
+          nationality: null,
+          basePrice: Number(manualPlayer.basePrice),
+          stats: null,
+          currentTeamId: manualPlayer.currentTeamId || null,
+        },
+      ]);
+      setManualPlayer({
+        name: "",
+        role: "",
+        basePrice: "",
+        currentTeamId: "",
+      });
+    } catch (manualError) {
+      setError(toErrorMessage(manualError));
+    } finally {
+      setPendingAction(null);
+    }
   }
 
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
@@ -184,6 +228,76 @@ export function UploadPlayersForm({
 
   return (
     <div className="form-grid">
+      <div
+        className="panel"
+        style={{ padding: "0.9rem", background: "rgba(255,255,255,0.03)", borderColor: "rgba(99,102,241,0.16)" }}
+      >
+        <div style={{ display: "grid", gap: "0.75rem" }}>
+          <div>
+            <h3 style={{ margin: 0 }}>Add player manually</h3>
+            <p className="subtle" style={{ margin: "0.3rem 0 0" }}>
+              Add one player directly. If you choose a current team, the player will be added as already sold to that team.
+            </p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.65rem" }}>
+            <input
+              className="input"
+              disabled={pending}
+              onChange={(event) =>
+                setManualPlayer((current) => ({ ...current, name: event.target.value }))
+              }
+              placeholder="Player name"
+              type="text"
+              value={manualPlayer.name}
+            />
+            <input
+              className="input"
+              disabled={pending}
+              onChange={(event) =>
+                setManualPlayer((current) => ({ ...current, role: event.target.value }))
+              }
+              placeholder="Role"
+              type="text"
+              value={manualPlayer.role}
+            />
+            <input
+              className="input"
+              disabled={pending}
+              min="0"
+              onChange={(event) =>
+                setManualPlayer((current) => ({ ...current, basePrice: event.target.value }))
+              }
+              placeholder="Price"
+              type="number"
+              value={manualPlayer.basePrice}
+            />
+            <select
+              className="select"
+              disabled={pending}
+              onChange={(event) =>
+                setManualPlayer((current) => ({ ...current, currentTeamId: event.target.value }))
+              }
+              value={manualPlayer.currentTeamId}
+            >
+              <option value="">No current team</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.shortCode} - {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            className="button"
+            disabled={pending}
+            onClick={() => void handleManualAdd()}
+            type="button"
+          >
+            {pendingAction === "manual" ? "Adding player..." : "Add player"}
+          </button>
+        </div>
+      </div>
+
       <div className="field">
         <label htmlFor="players-upload">Players CSV/XLSX</label>
         <input
@@ -200,7 +314,8 @@ export function UploadPlayersForm({
         <span className="mono">Player</span>, <span className="mono">role</span> or{" "}
         <span className="mono">Role</span>, optional{" "}
         <span className="mono">nationality</span>, and optional{" "}
-        <span className="mono">basePrice</span>. If pricing is missing, the room
+        <span className="mono">basePrice</span>. You can also include an optional{" "}
+        <span className="mono">currentTeamId</span> to add a player as already sold. If pricing is missing, the room
         bid increment becomes the opening bid. Columns like{" "}
         <span className="mono">IPL Team</span> are preserved in player stats.
       </div>

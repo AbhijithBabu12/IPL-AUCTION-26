@@ -43,13 +43,75 @@ export async function DELETE(
     const input = await readJson(request, removePlayersSchema);
     const admin = getSupabaseAdminClient();
     const auctionState = await getAuctionStateOnly(room.id);
+    const targetIds = input.removeAll
+      ? null
+      : [...new Set((input.playerIds ?? []).filter(Boolean))];
 
-    if (auctionState && !["WAITING", "COMPLETED"].includes(auctionState.phase)) {
+    const playerQuery = admin
+      .from("players")
+      .select("id, current_team_id, sold_price")
+      .eq("room_id", room.id);
+    const { data: targetPlayers, error: targetError } = input.removeAll
+      ? await playerQuery
+      : await playerQuery.in("id", targetIds ?? []);
+
+    if (targetError) {
+      throw new AppError(targetError.message, 500, "PLAYER_FETCH_FAILED");
+    }
+
+    if (auctionState?.currentPlayerId && (targetPlayers ?? []).some((player) => player.id === auctionState.currentPlayerId)) {
       throw new AppError(
-        "Players can only be removed before the auction starts or after it is completed.",
+        "The player currently on the block cannot be removed right now.",
         400,
-        "AUCTION_LOCKED",
+        "ACTIVE_PLAYER_LOCKED",
       );
+    }
+
+    const refundMap = new Map<string, number>();
+    for (const player of targetPlayers ?? []) {
+      const teamId = player.current_team_id ? String(player.current_team_id) : null;
+      const soldPrice = Number(player.sold_price ?? 0);
+      if (teamId && soldPrice > 0) {
+        refundMap.set(teamId, (refundMap.get(teamId) ?? 0) + soldPrice);
+      }
+    }
+
+    if ((targetPlayers ?? []).length > 0) {
+      const deleteBidsQuery = admin.from("bids").delete().eq("room_id", room.id);
+      const deleteSquadQuery = admin.from("squad").delete().eq("room_id", room.id);
+
+      if (input.removeAll) {
+        await deleteBidsQuery;
+        await deleteSquadQuery;
+      } else {
+        await deleteBidsQuery.in("player_id", targetIds ?? []);
+        await deleteSquadQuery.in("player_id", targetIds ?? []);
+      }
+    }
+
+    for (const [teamId, refundAmount] of refundMap.entries()) {
+      const { data: teamRow, error: teamFetchError } = await admin
+        .from("teams")
+        .select("purse_remaining")
+        .eq("room_id", room.id)
+        .eq("id", teamId)
+        .maybeSingle();
+
+      if (teamFetchError) {
+        throw new AppError(teamFetchError.message, 500, "TEAM_FETCH_FAILED");
+      }
+
+      if (!teamRow) continue;
+
+      const { error: teamUpdateError } = await admin
+        .from("teams")
+        .update({ purse_remaining: Number(teamRow.purse_remaining) + refundAmount })
+        .eq("room_id", room.id)
+        .eq("id", teamId);
+
+      if (teamUpdateError) {
+        throw new AppError(teamUpdateError.message, 500, "TEAM_UPDATE_FAILED");
+      }
     }
 
     let deletedCount = 0;

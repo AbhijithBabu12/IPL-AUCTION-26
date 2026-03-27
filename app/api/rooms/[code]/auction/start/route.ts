@@ -28,13 +28,32 @@ export async function POST(
       throw new AppError("Create at least one team before starting.", 400, "NO_TEAMS");
     }
 
-    if (auctionState && auctionState.phase !== "WAITING") {
+    if (auctionState && !["WAITING", "ROUND_END", "COMPLETED"].includes(auctionState.phase)) {
       throw new AppError("Auction has already started.", 400, "AUCTION_ALREADY_STARTED");
     }
 
+    if (auctionState && ["ROUND_END", "COMPLETED"].includes(auctionState.phase)) {
+      const { error: recycleError } = await admin
+        .from("players")
+        .update({ status: "AVAILABLE" })
+        .eq("room_id", room.id)
+        .eq("status", "UNSOLD");
+
+      if (recycleError) {
+        throw new AppError(recycleError.message, 500, "PLAYER_RESET_FAILED");
+      }
+    }
+
+    const refreshedPlayers =
+      auctionState && ["ROUND_END", "COMPLETED"].includes(auctionState.phase)
+        ? players.map((player) =>
+            player.status === "UNSOLD" ? { ...player, status: "AVAILABLE" as const } : player,
+          )
+        : players;
+
     const nextState = buildStartingAuctionState({
       room,
-      players,
+      players: refreshedPlayers,
       now: new Date(),
     });
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { canAuctionComplete, resolveExpiredAuction } from "@/lib/domain/auction";
+import { resolveExpiredAuction } from "@/lib/domain/auction";
 import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
 import { isMissingColumnError, omitOptionalColumns } from "@/lib/server/auction-state";
@@ -109,44 +109,53 @@ export async function POST(
       }
     }
 
-    // Compute updated squads and purses to check auto-termination
-    const updatedSquads = resolution.sold
-      ? [
-          ...squads,
-          {
-            id: "",
-            roomId: room.id,
-            teamId: auctionState.currentTeamId!,
-            playerId: resolution.currentPlayer.id,
-            purchasePrice: auctionState.currentBid!,
-            acquiredInRound: auctionState.currentRound,
-            createdAt: "",
-          },
-        ]
-      : squads;
+    const resolvedPlayers = players.map((player) =>
+      player.id === resolution.currentPlayer.id
+        ? {
+            ...player,
+            status: resolution.sold ? "SOLD" : "UNSOLD",
+            currentTeamId: resolution.sold ? auctionState.currentTeamId : null,
+            soldPrice: resolution.sold ? auctionState.currentBid : null,
+          }
+        : player,
+    );
 
-    const updatedTeams = resolution.sold
-      ? teams.map((t) =>
-          t.id === auctionState.currentTeamId
-            ? { ...t, purseRemaining: t.purseRemaining - auctionState.currentBid! }
-            : t,
-        )
-      : teams;
+    const unsoldPlayers = resolvedPlayers
+      .filter((player) => player.status === "UNSOLD")
+      .sort((left, right) => left.orderIndex - right.orderIndex);
 
-    // Don't force-complete if we're intentionally going to ROUND_END for admin picker
-    const forceComplete =
-      resolution.nextPhase !== "COMPLETED" &&
-      resolution.nextPhase !== "ROUND_END" &&
-      canAuctionComplete(updatedTeams, updatedSquads);
+    let finalPhase = resolution.nextPhase;
+    let finalPlayerId = resolution.nextPlayerId;
+    let finalExpiresAt = resolution.expiresAt;
+    let finalLastEvent = resolution.lastEvent;
+    let finalRound = resolution.nextRound;
 
-    const finalPhase = forceComplete ? "COMPLETED" : resolution.nextPhase;
-    const finalPlayerId = forceComplete ? null : resolution.nextPlayerId;
-    const finalExpiresAt = forceComplete ? null : resolution.expiresAt;
-    const finalLastEvent = forceComplete ? "AUCTION_COMPLETED" : resolution.lastEvent;
+    if (!resolution.nextPlayerId && unsoldPlayers.length > 0) {
+      const { error: recycleError } = await admin
+        .from("players")
+        .update({ status: "AVAILABLE" })
+        .eq("room_id", room.id)
+        .eq("status", "UNSOLD");
+
+      if (recycleError) {
+        throw new AppError(recycleError.message, 500, "ROUND_RECYCLE_FAILED");
+      }
+
+      finalRound = resolution.nextRound + 1;
+      finalPhase = "LIVE";
+      finalPlayerId = unsoldPlayers[0]?.id ?? null;
+      finalExpiresAt = new Date(Date.now() + room.timerSeconds * 1000).toISOString();
+      finalLastEvent = "ROUND_STARTED";
+    } else if (!resolution.nextPlayerId) {
+      finalPhase = "ROUND_END";
+      finalPlayerId = null;
+      finalExpiresAt = null;
+      finalLastEvent = "ROUND_END";
+    }
 
     const finalUpdate = {
       phase: finalPhase,
-      current_round: resolution.nextRound,
+      current_round: finalRound,
       current_player_id: finalPlayerId,
       current_bid: null,
       current_team_id: null,

@@ -35,9 +35,9 @@ export async function POST(
       .eq("room_id", room.id)
       .eq("status", "AVAILABLE");
 
-    // Transition to ROUND_END so admins can pick unsold players for the next round
+    // Complete the auction when the admin chooses to close it
     const updateValues = {
-      phase: "ROUND_END",
+      phase: "COMPLETED",
       current_player_id: null,
       current_bid: null,
       current_team_id: null,
@@ -68,7 +68,7 @@ export async function POST(
     revalidatePath(`/auction/${room.code}`);
     revalidatePath(`/results/${room.code}`);
 
-    return NextResponse.json({ ok: true, phase: "ROUND_END" });
+    return NextResponse.json({ ok: true, phase: "COMPLETED" });
   } catch (error) {
     return handleRouteError(error);
   }

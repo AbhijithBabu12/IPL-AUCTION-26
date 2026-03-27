@@ -238,7 +238,7 @@ export function ReadinessPanel({
           <button
             aria-label={`Remove ${player.name}`}
             className="button ghost"
-            disabled={pendingPlayerId !== null || phase === "LIVE" || phase === "PAUSED"}
+            disabled={pendingPlayerId !== null}
             onClick={() => {
               if (!window.confirm(`Remove ${player.name} from this room?`)) return;
               void removePlayer(player);

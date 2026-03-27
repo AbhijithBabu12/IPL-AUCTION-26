@@ -18,6 +18,7 @@ export const playerUploadRowSchema = z.object({
   nationality: z.string().trim().optional().nullable(),
   basePrice: z.coerce.number().int().nonnegative(),
   stats: z.record(z.unknown()).optional().nullable(),
+  currentTeamId: z.string().uuid().optional().nullable(),
 });
 
 export const playerUploadSchema = z.object({

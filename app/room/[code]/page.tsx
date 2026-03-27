@@ -172,6 +172,7 @@ export default async function RoomPage({
                 <UploadPlayersForm
                   defaultPlayerCount={defaultPlayerPoolCount}
                   roomCode={snapshot.room.code}
+                  teams={snapshot.teams}
                 />
               </div>
 
