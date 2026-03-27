@@ -35,8 +35,6 @@ export default function IntroSplash() {
       <div className="sfl-intro-streak sfl-intro-streak-two" />
 
       <div className="sfl-intro-stage">
-        <div className="sfl-intro-kicker">Fantasy auction broadcast</div>
-
         <div className="sfl-intro-logo-wrap">
           <div className="sfl-intro-shockwave" />
           <div className="sfl-intro-orbit" />
@@ -61,7 +59,7 @@ export default function IntroSplash() {
             <span>L</span>
           </div>
           <div className="sfl-intro-tagline">St. Thomas Fantasy League</div>
-          <div className="sfl-intro-edition">Auction platform 2026</div>
+          <div className="sfl-intro-edition">AUCTION PLATFORM - 2026</div>
         </div>
       </div>
 
