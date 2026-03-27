@@ -2478,3 +2478,216 @@ html {
 
 
 
+
+.sfl-intro {
+  background: #000;
+}
+
+.sfl-intro-grid {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 78px 78px;
+  mask: radial-gradient(circle at center, black 32%, transparent 88%);
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.sfl-intro-ambient {
+  position: absolute;
+  top: 50%;
+  width: 34rem;
+  height: 20rem;
+  border-radius: 999px;
+  filter: blur(28px);
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.sfl-intro-ambient-left {
+  left: -8rem;
+  background: radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%);
+  animation: sfl-intro-ambient-left 4.5s ease-in-out infinite;
+}
+
+.sfl-intro-ambient-right {
+  right: -8rem;
+  background: radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%);
+  animation: sfl-intro-ambient-right 5.2s ease-in-out infinite;
+}
+
+.sfl-intro-stage {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 1.35rem;
+  padding: 2rem 2.4rem;
+}
+
+.sfl-intro-streak {
+  position: absolute;
+  left: 50%;
+  height: 2px;
+  width: min(58vw, 760px);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), rgba(255,255,255,0.95), rgba(255,255,255,0.2), transparent);
+  filter: blur(0.6px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sfl-intro-streak-one {
+  top: 34%;
+  transform: translateX(-50%) scaleX(0.35);
+}
+
+.sfl-intro-streak-two {
+  top: 67%;
+  transform: translateX(-50%) scaleX(0.25);
+}
+
+.sfl-intro-logo-wrap {
+  width: 260px;
+  height: 260px;
+  margin-bottom: 1.5rem;
+}
+
+.sfl-intro-logo-plate {
+  position: absolute;
+  inset: 1rem;
+  border-radius: 50%;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.015)),
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.08), transparent 58%);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 0 0 10px rgba(255,255,255,0.025),
+    0 36px 80px rgba(0,0,0,0.48);
+}
+
+.sfl-intro-disc {
+  width: 190px;
+  height: 190px;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255,255,255,0.18), rgba(18,18,18,0.96) 48%, rgba(4,4,4,0.99) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 20px 60px rgba(0,0,0,0.6);
+}
+
+.sfl-intro-orbit {
+  inset: -2px;
+  background: conic-gradient(from 0deg, transparent 56%, rgba(255,255,255,0.92) 78%, rgba(255,255,255,0.35) 92%, transparent 100%) border-box;
+}
+
+.sfl-intro-flare {
+  width: min(70vw, 880px);
+  height: 6px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.03) 35%, rgba(255,255,255,0.96) 50%, rgba(255,255,255,0.16) 64%, transparent 100%);
+}
+
+.sfl-intro-text {
+  gap: 0.5rem;
+}
+
+.sfl-intro-wordmark {
+  gap: 0.08em;
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 20px rgba(255,255,255,0.12), 0 0 48px rgba(255,255,255,0.08);
+}
+
+.sfl-intro-tagline {
+  letter-spacing: 0.24em;
+  color: rgba(255,255,255,0.62);
+}
+
+.sfl-intro-edition {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  letter-spacing: 0.28em;
+  color: rgba(255,255,255,0.72);
+}
+
+.sfl-intro-rule {
+  height: 2px;
+  bottom: 7.5%;
+}
+
+.sfl-intro[data-phase="2"] .sfl-intro-streak-one,
+.sfl-intro[data-phase="3"] .sfl-intro-streak-one,
+.sfl-intro[data-phase="4"] .sfl-intro-streak-one {
+  animation: sfl-intro-streak-in 650ms ease forwards;
+}
+
+.sfl-intro[data-phase="3"] .sfl-intro-streak-two,
+.sfl-intro[data-phase="4"] .sfl-intro-streak-two {
+  animation: sfl-intro-streak-in 650ms 120ms ease forwards;
+}
+
+@keyframes sfl-intro-streak-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scaleX(0.25);
+  }
+  to {
+    opacity: 0.9;
+    transform: translateX(-50%) scaleX(1);
+  }
+}
+
+@keyframes sfl-intro-ambient-left {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(2rem, -1rem, 0) scale(1.08); }
+}
+
+@keyframes sfl-intro-ambient-right {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-1.8rem, 1.1rem, 0) scale(1.06); }
+}
+
+@media (max-width: 640px) {
+  .sfl-intro-stage {
+    gap: 1rem;
+    padding: 1.25rem;
+  }
+
+  .sfl-intro-logo-wrap {
+    width: 210px;
+    height: 210px;
+    margin-bottom: 1rem;
+  }
+
+  .sfl-intro-disc {
+    width: 152px;
+    height: 152px;
+  }
+
+  .sfl-intro-kicker {
+    letter-spacing: 0.12em;
+    font-size: 0.64rem;
+  }
+
+  .sfl-intro-wordmark {
+    font-size: clamp(3.2rem, 18vw, 4.8rem);
+    letter-spacing: 0.14em;
+  }
+
+  .sfl-intro-tagline {
+    letter-spacing: 0.16em;
+  }
+
+  .sfl-intro-edition {
+    letter-spacing: 0.18em;
+    font-size: 0.62rem;
+  }
+}
