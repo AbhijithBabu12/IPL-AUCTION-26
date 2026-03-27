@@ -35,21 +35,33 @@ export function SoldPlayerShowcase({
   const lastFrameRef = useRef<number | null>(null);
   const offsetRef = useRef(0);
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const pausedRef = useRef(false);
 
   const selectedItem =
     orderedItems.find((item) => item.id === selectedId) ?? orderedItems[0] ?? null;
-  const renderedItems = useMemo(
-    () => [...orderedItems, ...orderedItems, ...orderedItems],
-    [orderedItems],
-  );
+  const loopItems = useMemo(() => {
+    const minItemCount = variant === "ticker" ? 10 : 8;
+    const repeated = [...orderedItems];
+
+    while (repeated.length < minItemCount && orderedItems.length > 0) {
+      repeated.push(...orderedItems);
+    }
+
+    return repeated;
+  }, [orderedItems, variant]);
+  const renderedItems = useMemo(() => [...loopItems, ...loopItems], [loopItems]);
+
+  useEffect(() => {
+    pausedRef.current = isPaused;
+  }, [isPaused]);
 
   useEffect(() => {
     const track = trackRef.current;
     if (!track || orderedItems.length === 0) return;
 
-    const pixelsPerSecond = variant === "ticker" ? 22 : 17;
-    const segmentWidth = track.scrollWidth / 3;
-    offsetRef.current = segmentWidth;
+    const pixelsPerSecond = variant === "ticker" ? 30 : 24;
+    const segmentWidth = track.scrollWidth / 2;
+    offsetRef.current = 0;
     track.style.transform = `translateX(-${offsetRef.current}px)`;
 
     const step = (time: number) => {
@@ -60,9 +72,9 @@ export function SoldPlayerShowcase({
       const deltaMs = time - lastFrameRef.current;
       lastFrameRef.current = time;
 
-      if (!isPaused && segmentWidth > 0) {
+      if (!pausedRef.current && segmentWidth > 0) {
         offsetRef.current += (pixelsPerSecond * deltaMs) / 1000;
-        if (offsetRef.current >= segmentWidth * 2) {
+        if (offsetRef.current >= segmentWidth) {
           offsetRef.current -= segmentWidth;
         }
         track.style.transform = `translateX(-${offsetRef.current}px)`;
@@ -82,7 +94,7 @@ export function SoldPlayerShowcase({
       }
       lastFrameRef.current = null;
     };
-  }, [isPaused, orderedItems.length, variant]);
+  }, [orderedItems.length, renderedItems.length, variant]);
 
   function pauseAutoScroll() {
     setIsPaused(true);
