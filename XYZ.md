@@ -355,3 +355,106 @@ MOD   app/api/rooms/[code]/cricsheet-sync/route.ts  (buildUuidMap, CRICSHEET_UUI
 ```
 
 > **No DB changes required.** The UUID translation happens entirely at parse time — stats are stored under full names as before.
+
+---
+
+# Session Changelog (2026-03-28 — Part 4)
+
+## What Was Changed
+
+### 9. UUID Full-Length Fix — Cricsheet Registry Lookup
+
+**Problem:** After implementing UUID-based name resolution, the matching still failed in production. Root cause: Cricsheet stores **full UUIDs** in `info.registry.people` (e.g. `"dbe50b21-xxxx-xxxx-xxxx-xxxxxxxxxxxx"`) but `final_mapping.json` only uses the **first 8 hex characters** as keys (e.g. `"dbe50b21"`). Every UUID lookup silently returned `undefined`, so no translation happened and the old broken surname fallback fired.
+
+**Fix:** Slice the full UUID to 8 chars before lookup:
+```typescript
+const full = uuidMap.get(fullUuid.slice(0, 8));
+```
+
+**Also added:** Short-name map as a second fallback inside `processMatch()` (for older Cricsheet JSONs that don't include `registry.people`). Resolution priority:
+1. UUID via `info.registry.people` → `uuidMap.get(uuid.slice(0,8))`
+2. Normalised short-name map (same as original approach)
+3. Raw name (pass-through)
+
+| File | Change |
+|------|--------|
+| `lib/server/cricsheet.ts` | Added `.slice(0, 8)` to UUID lookup; added `shortNameMap` as second parameter to `processMatch`, `processZipPerMatch`, `processSingleMatchJson`, `processZip` |
+| `app/api/rooms/[code]/cricsheet-sync/route.ts` | Added `buildShortNameMap()` alongside `buildUuidMap()`; passes both maps to parser functions |
+
+---
+
+### 10. DB — `cricsheet_uuid` Column on `players`
+
+**Purpose:** After the first successful Cricsheet sync, each matched player's Cricsheet UUID is stored in `players.cricsheet_uuid`. All future syncs match by UUID directly — bypassing name matching entirely — so point misattribution is impossible even if player names are renamed or have typos.
+
+**Flow:**
+- **First sync:** name-based match succeeds → UUID stored in `players.cricsheet_uuid`
+- **All subsequent syncs:** UUID looked up first → exact stats key found → no string matching needed
+
+**Run once in Supabase → SQL Editor:**
+```sql
+-- file: supabase/add-cricsheet-uuid.sql
+ALTER TABLE players ADD COLUMN IF NOT EXISTS cricsheet_uuid text;
+CREATE INDEX IF NOT EXISTS idx_players_cricsheet_uuid
+  ON players (cricsheet_uuid)
+  WHERE cricsheet_uuid IS NOT NULL;
+```
+
+| File | Change |
+|------|--------|
+| `supabase/add-cricsheet-uuid.sql` | **NEW** — migration file |
+| `app/api/rooms/[code]/cricsheet-sync/route.ts` | Fetches `cricsheet_uuid` alongside player; adds step 0 (UUID match) before name fallbacks; stores UUID on first successful match via `updatePayload.cricsheet_uuid` |
+
+> **DB change required:** Run `supabase/add-cricsheet-uuid.sql` once.
+
+---
+
+### 11. Live Fetch Fix — CricketData & RapidAPI
+
+**Problems:**
+1. `TypeError: fetch failed` (CricketData) — base URL was `https://api.cricketdata.org` which doesn't resolve. The actual CricAPI.com endpoint is `https://api.cricapi.com/v1`.
+2. `IPL 2026 series not found` (RapidAPI) — code searched `/series/v1/domestic` only. IPL is a T20 **league**, not domestic cricket. Even after adding `league` and `international` categories, the series still wasn't found early in the season.
+
+**Fixes:**
+
+*CricketData:*
+- Changed `BASE` constant to `https://api.cricapi.com/v1`
+- Added pagination (tries offsets 0, 25, 50, 75)
+- Expanded series name match to accept `"IPL 2026"`, `"TATA IPL 2026"` etc. (not just `"Indian Premier League"`)
+
+*RapidAPI Cricbuzz:*
+- Series search now tries `league → domestic → international` in order
+- Added fallback: if all category searches fail, hits `/matches/v1/recent` and scans the feed for IPL matches by name — works even when the series isn't yet listed in categories
+
+| File | Change |
+|------|--------|
+| `lib/server/webscrape/cricketdata.ts` | Changed `BASE` URL; added `isIPLSeries()` helper; paginated `findIPLSeriesId()` |
+| `lib/server/webscrape/rapidapi.ts` | `findIPLSeriesId()` tries multiple categories; added `findIPLMatchesViaRecent()` fallback; made `listSeriesMatches()` more robust against variable response shapes |
+| `app/api/rooms/[code]/webscrape-preview/route.ts` | Returns structured `errors` object per provider so UI shows exactly what failed |
+
+---
+
+### 12. Auto-Refresh Every 10 Minutes
+
+**Feature:** Checkbox in the Live Web Sync panel toggles automatic re-fetching every 10 minutes. While enabled, a `MM:SS` countdown shows time until next fetch.
+
+**Implementation:**
+- `handleFetch` converted to `useCallback` (stable reference required by the interval effect)
+- `useEffect` with `setInterval(1000)` drives a countdown; when it hits 0 it calls `handleFetch()` and resets to 600
+- Correct hook order: `handleFetch` callback defined **before** the effect that depends on it (avoids "used before initialisation" crash)
+- `loadStored` inlined inside its own `useEffect` (was a standalone `async function` before — now properly scoped)
+
+**UI:** Checkbox + countdown label next to the Fetch button. Turning the checkbox off clears the interval immediately.
+
+| File | Change |
+|------|--------|
+| `components/room/webscrape-sync-panel.tsx` | Added `autoRefresh`, `nextRefreshIn` state; `handleFetch` → `useCallback`; auto-refresh `useEffect`; countdown label in JSX |
+
+---
+
+## DB Changes Required (cumulative)
+
+| Migration file | When to run | Status |
+|---|---|---|
+| `supabase/match-results.sql` | Run once (previous session) | Existing |
+| `supabase/add-cricsheet-uuid.sql` | Run once (this session) | **NEW — run now** |
