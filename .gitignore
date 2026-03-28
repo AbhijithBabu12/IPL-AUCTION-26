@@ -36,3 +36,8 @@ skills-lock.json
 # Excel data files (upload via the UI, not git)
 *.xlsx
 *.xls
+# Data files (upload via the UI, not git)
+*.xlsx
+*.xls
+*.zip
+*.zip

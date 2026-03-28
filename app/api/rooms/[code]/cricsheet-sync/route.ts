@@ -14,18 +14,75 @@
  * Body (form):  multipart/form-data with fields `file` (ZIP) and `season`
  */
 
+<<<<<<< HEAD
+=======
+import fs from "fs";
+import path from "path";
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
 import { requireApiUser } from "@/lib/server/auth";
+<<<<<<< HEAD
 import { processZipPerMatch } from "@/lib/server/cricsheet";
+=======
+import { processZipPerMatch, processSingleMatchJson } from "@/lib/server/cricsheet";
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 import { requireRoomAdmin } from "@/lib/server/room";
 import type { PlayerMatchStats } from "@/lib/server/webscrape/parser";
 import type { PlayerStats } from "@/lib/domain/scoring";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
+<<<<<<< HEAD
+=======
+// ── Cricsheet short-name → full-name translation map ─────────────────────────
+// Built once at module load from final_mapping.json in the project root.
+// Maps normalised short name (e.g. "hh pandya") → full name ("Hardik Pandya").
+
+interface MappingEntry { short_name: string; full_name: string; }
+
+function buildUuidMap(): Map<string, string> {
+  const map = new Map<string, string>();
+  try {
+    const raw = fs.readFileSync(
+      path.join(process.cwd(), "final_mapping.json"),
+      "utf8",
+    );
+    // Top-level keys ARE the Cricsheet registry UUIDs — map uuid → full_name directly.
+    const entries = JSON.parse(raw) as Record<string, MappingEntry>;
+    for (const [uuid, { full_name }] of Object.entries(entries)) {
+      if (uuid && full_name) map.set(uuid, full_name);
+    }
+    console.log(`[cricsheet-sync] UUID map loaded: ${map.size} entries from final_mapping.json`);
+  } catch (err) {
+    console.error("[cricsheet-sync] failed to load final_mapping.json — player names will not be translated:", err);
+  }
+  return map;
+}
+
+const CRICSHEET_UUID_MAP = buildUuidMap();
+
+/** Fallback: normalised short name → full name (for JSONs without registry.people). */
+function buildShortNameMap(): Map<string, string> {
+  const map = new Map<string, string>();
+  try {
+    const raw = fs.readFileSync(path.join(process.cwd(), "final_mapping.json"), "utf8");
+    const entries = JSON.parse(raw) as Record<string, MappingEntry>;
+    for (const { short_name, full_name } of Object.values(entries)) {
+      if (short_name && full_name) {
+        const key = short_name.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+        map.set(key, full_name);
+      }
+    }
+  } catch { /* silent — UUID map already logged the error */ }
+  return map;
+}
+
+const CRICSHEET_SHORT_MAP = buildShortNameMap();
+
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 export const dynamic = "force-dynamic";
 
 // ── Name normalisation ────────────────────────────────────────────────────────
@@ -38,6 +95,58 @@ function normaliseName(name: string): string {
     .trim();
 }
 
+<<<<<<< HEAD
+=======
+/**
+ * Returns true if a normalised stats key looks like a Cricsheet short-name:
+ * first token is 1–2 characters (initials), e.g. "b kumar", "kh pandya".
+ */
+function isShortNameFormat(normKey: string): boolean {
+  const parts = normKey.split(" ");
+  return parts.length >= 2 && (parts[0]?.length ?? 0) <= 2;
+}
+
+/**
+ * Match a DB player's normalised full name against a short-name stats key.
+ *
+ * Rules:
+ *  1. Surnames must be identical.
+ *  2. Each character in the stats-key initials must match the first letter of
+ *     the corresponding name part in the DB player (only as many as the DB
+ *     player has — middle-name initials in Cricsheet are ignored when the DB
+ *     name has no middle name).
+ *
+ * Examples:
+ *   "kh pandya" vs "krunal pandya"   → true  (K=K, surname pandya=pandya)
+ *   "kh pandya" vs "hardik pandya"   → false (K≠H)
+ *   "hh pandya" vs "hardik pandya"   → true  (H=H)
+ *   "b kumar"   vs "bhuvneshwar kumar" → true  (B=B)
+ *   "b kumar"   vs "mukesh kumar"    → false (B≠M)
+ *   "b kumar"   vs "ashwani kumar"   → false (B≠A)
+ */
+function matchesShortName(statsNormKey: string, dbNormKey: string): boolean {
+  const sParts = statsNormKey.split(" ");
+  const dParts = dbNormKey.split(" ");
+  if (sParts.length < 2 || dParts.length < 2) return false;
+
+  // Surnames must match exactly
+  if (sParts[sParts.length - 1] !== dParts[dParts.length - 1]) return false;
+
+  // Initials string from stats key, e.g. "kh" or "b"
+  const sInitials = sParts.slice(0, -1).join("");
+  // First-name parts from DB player, e.g. ["krunal"] or ["bhuvneshwar"]
+  const dFirstNames = dParts.slice(0, -1);
+
+  // Check each initial against the corresponding DB name part
+  // Only check as many as the DB player has first-name parts (skip extra middle-name initials)
+  const checkLen = Math.min(sInitials.length, dFirstNames.length);
+  for (let i = 0; i < checkLen; i++) {
+    if (sInitials[i] !== dFirstNames[i]![0]) return false;
+  }
+  return true;
+}
+
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 // ── Aggregate PlayerMatchStats → season PlayerStats ───────────────────────────
 // Identical logic to webscrape-accept so the same data shape is written.
 
@@ -111,9 +220,16 @@ export async function POST(
     const { room } = await requireRoomAdmin(code, authUser.id);
     const admin = getSupabaseAdminClient();
 
+<<<<<<< HEAD
     // ── Get ZIP buffer ────────────────────────────────────────────────────────
     let zipBuffer: Buffer;
     let season: string;
+=======
+    // ── Get file buffer ───────────────────────────────────────────────────────
+    let fileBuffer: Buffer;
+    let season: string;
+    let uploadedFilename = ""; // only set for file uploads
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 
     const ct = request.headers.get("content-type") ?? "";
 
@@ -122,7 +238,12 @@ export async function POST(
       const file = form.get("file") as File | null;
       season = String(form.get("season") || "2026");
       if (!file) throw new AppError("No file uploaded.", 400, "NO_FILE");
+<<<<<<< HEAD
       zipBuffer = Buffer.from(await file.arrayBuffer());
+=======
+      fileBuffer = Buffer.from(await file.arrayBuffer());
+      uploadedFilename = file.name;
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
     } else {
       const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
       season = String(body.season ?? "2026");
@@ -149,12 +270,24 @@ export async function POST(
         );
       }
 
+<<<<<<< HEAD
       zipBuffer = Buffer.from(await fetchRes.arrayBuffer());
     }
 
     // ── Parse ZIP into per-match entries ──────────────────────────────────────
     const { matches, matchesProcessed, matchesSkipped, seasons } =
       processZipPerMatch(zipBuffer, season);
+=======
+      fileBuffer = Buffer.from(await fetchRes.arrayBuffer());
+    }
+
+    // ── Parse file into per-match entries ─────────────────────────────────────
+    // Single .json file → one match; .zip file (or auto-fetch) → all matches
+    const isJsonUpload = uploadedFilename.toLowerCase().endsWith(".json");
+    const { matches, matchesProcessed, matchesSkipped, seasons } = isJsonUpload
+      ? processSingleMatchJson(fileBuffer, uploadedFilename, season, CRICSHEET_UUID_MAP, CRICSHEET_SHORT_MAP)
+      : processZipPerMatch(fileBuffer, season, CRICSHEET_UUID_MAP, CRICSHEET_SHORT_MAP);
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 
     if (matchesProcessed === 0) {
       return NextResponse.json(
@@ -240,10 +373,23 @@ export async function POST(
       normToOriginal.set(normaliseName(name), name);
     }
 
+<<<<<<< HEAD
     // Fetch room players and update stats
     const { data: players, error: playersErr } = await admin
       .from("players")
       .select("id, name, stats")
+=======
+    // Build full_name → uuid reverse map so we can store the UUID after a name match
+    const fullNameToUuid = new Map<string, string>();
+    for (const [uuid, fullName] of CRICSHEET_UUID_MAP) {
+      fullNameToUuid.set(fullName, uuid);
+    }
+
+    // Fetch room players (include cricsheet_uuid for UUID-first matching)
+    const { data: players, error: playersErr } = await admin
+      .from("players")
+      .select("id, name, stats, cricsheet_uuid")
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
       .eq("room_id", room.id);
 
     if (playersErr) throw new AppError(playersErr.message, 500, "DB_QUERY_FAILED");
@@ -255,10 +401,33 @@ export async function POST(
       const playerName = String(player.name);
       const normKey = normaliseName(playerName);
 
+<<<<<<< HEAD
       // 1 — exact normalised match
       let statsKey = normToOriginal.get(normKey);
 
       // 2 — surname fallback (unambiguous only)
+=======
+      // 0 — UUID match (stored from a previous sync — perfectly stable, no string matching)
+      let statsKey: string | undefined;
+      const storedUuid = player.cricsheet_uuid as string | null | undefined;
+      if (storedUuid) {
+        const fullName = CRICSHEET_UUID_MAP.get(storedUuid);
+        if (fullName && aggregated[fullName] !== undefined) statsKey = fullName;
+      }
+
+      // 1 — exact normalised match
+      if (!statsKey) statsKey = normToOriginal.get(normKey);
+
+      // 2 — initial-based match for stats keys in "B Kumar" / "KH Pandya" format
+      if (!statsKey) {
+        const initCandidates = Array.from(normToOriginal.entries()).filter(
+          ([k]) => isShortNameFormat(k) && matchesShortName(k, normKey),
+        );
+        if (initCandidates.length === 1) statsKey = initCandidates[0]![1];
+      }
+
+      // 3 — surname fallback (unambiguous only, last resort)
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
       if (!statsKey) {
         const surname = normKey.split(" ").pop() ?? "";
         if (surname.length >= 3) {
@@ -277,7 +446,11 @@ export async function POST(
       const agg = aggregated[statsKey]!;
       const existing = (player.stats ?? {}) as Record<string, unknown>;
 
+<<<<<<< HEAD
       // Overlay aggregated stats, preserve metadata (ipl_team, crisheet_name, etc.)
+=======
+      // Overlay aggregated stats, preserve metadata (ipl_team, etc.)
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
       const newStats: Record<string, unknown> = {
         ...existing,
         runs: agg.runs,
@@ -303,9 +476,20 @@ export async function POST(
         matches_played: agg.matches_played,
       };
 
+<<<<<<< HEAD
       await admin
         .from("players")
         .update({ stats: newStats })
+=======
+      // Store UUID on first successful match so future syncs use UUID directly
+      const resolvedUuid = fullNameToUuid.get(statsKey);
+      const updatePayload: Record<string, unknown> = { stats: newStats };
+      if (resolvedUuid && !storedUuid) updatePayload.cricsheet_uuid = resolvedUuid;
+
+      await admin
+        .from("players")
+        .update(updatePayload)
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
         .eq("id", player.id as string);
 
       matched += 1;

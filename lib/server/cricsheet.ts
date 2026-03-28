@@ -58,6 +58,11 @@ interface CricsheetMatch {
     teams?: string[];
     players?: Record<string, string[]>; // team name → player names (announced XI)
     dates?: string[];
+<<<<<<< HEAD
+=======
+    /** Cricsheet built-in registry: maps each player's in-game name → their UUID. */
+    registry?: { people?: Record<string, string> };
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
   };
   innings?: CricsheetInning[];
 }
@@ -98,6 +103,7 @@ function getOrCreate(
 export function processMatch(
   match: CricsheetMatch,
   allStats: Map<string, CricsheetAccumulator>,
+<<<<<<< HEAD
 ): void {
   const innings = match.innings ?? [];
 
@@ -105,6 +111,51 @@ export function processMatch(
   const announcedPlayers = new Set<string>();
   for (const teamPlayers of Object.values(match.info.players ?? {})) {
     for (const p of teamPlayers) announcedPlayers.add(p);
+=======
+  /** Optional: Cricsheet registry UUID → canonical full name (from final_mapping.json).
+   *  Each Cricsheet match JSON includes info.registry.people which maps the player's
+   *  in-game name to their UUID.  This map then resolves UUID → full name — exact and
+   *  unambiguous, with no string normalisation required.
+   *  Falls back to shortNameMap when the registry is absent or incomplete. */
+  uuidMap?: Map<string, string>,
+  /** Fallback: normalised short name → full name.  Used when UUID lookup fails (e.g.
+   *  registry.people absent, or player not in final_mapping.json). */
+  shortNameMap?: Map<string, string>,
+): void {
+  // Per-match registry: player's Cricsheet name → their UUID
+  const registry = match.info.registry?.people ?? {};
+  const hasRegistry = Object.keys(registry).length > 0;
+
+  /** Normalise a name for short-name map lookup. */
+  const normShort = (n: string) =>
+    n.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+
+  /** Resolve a Cricsheet player name → canonical full name.
+   *  Priority: UUID registry → short-name map → raw name. */
+  const resolve = (name: string): string => {
+    // 1. UUID via match registry (most reliable)
+    if (uuidMap && hasRegistry) {
+      const fullUuid = registry[name];
+      if (fullUuid) {
+        const full = uuidMap.get(fullUuid.slice(0, 8));
+        if (full) return full;
+      }
+    }
+    // 2. Short-name normalisation fallback (handles older JSONs without registry)
+    if (shortNameMap) {
+      const full = shortNameMap.get(normShort(name));
+      if (full) return full;
+    }
+    return name;
+  };
+
+  const innings = match.innings ?? [];
+
+  // Players listed in the announced XI — translate names immediately
+  const announcedPlayers = new Set<string>();
+  for (const teamPlayers of Object.values(match.info.players ?? {})) {
+    for (const p of teamPlayers) announcedPlayers.add(resolve(p));
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
   }
 
   // Track who actually appeared on the field this match
@@ -131,7 +182,11 @@ export function processMatch(
         const isWide = (d.extras?.wides ?? 0) > 0;
 
         // ── Batter ────────────────────────────────────────────────────────────
+<<<<<<< HEAD
         const batter = d.batter;
+=======
+        const batter = resolve(d.batter);
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
         appearedInMatch.add(batter);
 
         const bAcc = getOrCreate(allStats, batter);
@@ -148,7 +203,11 @@ export function processMatch(
         matchBat.set(batter, bm);
 
         // ── Bowler ────────────────────────────────────────────────────────────
+<<<<<<< HEAD
         const bowler = d.bowler;
+=======
+        const bowler = resolve(d.bowler);
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
         appearedInMatch.add(bowler);
 
         const bowlAcc = getOrCreate(allStats, bowler);
@@ -168,12 +227,22 @@ export function processMatch(
 
         // ── Wickets ───────────────────────────────────────────────────────────
         for (const wicket of (d.wickets ?? [])) {
+<<<<<<< HEAD
           appearedInMatch.add(wicket.player_out);
 
           // Mark batter dismissed
           const outBm = matchBat.get(wicket.player_out) ?? { runs: 0, balls: 0, dismissed: false };
           outBm.dismissed = true;
           matchBat.set(wicket.player_out, outBm);
+=======
+          const playerOut = resolve(wicket.player_out);
+          appearedInMatch.add(playerOut);
+
+          // Mark batter dismissed
+          const outBm = matchBat.get(playerOut) ?? { runs: 0, balls: 0, dismissed: false };
+          outBm.dismissed = true;
+          matchBat.set(playerOut, outBm);
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 
           const isRunOut = wicket.kind === "run out";
           const isRetired = wicket.kind.startsWith("retired");
@@ -190,7 +259,11 @@ export function processMatch(
           // Fielder credit
           for (const fielder of (wicket.fielders ?? [])) {
             if (fielder.substitute) continue; // substitutes don't earn fielding points
+<<<<<<< HEAD
             const fielderName = fielder.name;
+=======
+            const fielderName = resolve(fielder.name);
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
             appearedInMatch.add(fielderName);
             const fAcc = getOrCreate(allStats, fielderName);
 
@@ -210,7 +283,12 @@ export function processMatch(
 
       // Maiden over: 6 legal balls AND 0 total runs in the over
       if (overLegalBalls === 6 && overTotalRuns === 0) {
+<<<<<<< HEAD
         const bowlAcc = allStats.get(overBowlerName);
+=======
+        const resolvedBowler = resolve(overBowlerName);
+        const bowlAcc = allStats.get(resolvedBowler);
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
         if (bowlAcc) bowlAcc.maiden_overs += 1;
       }
     } // end overs
@@ -317,7 +395,10 @@ export interface CricsheetMatchEntry {
 function accumulatorToMatchStats(
   acc: CricsheetAccumulator,
 ): PlayerMatchStats {
+<<<<<<< HEAD
   const dismissed = acc.ducks > 0 || acc.matches_played > 0; // approximation – duck means dismissed at 0
+=======
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
   return {
     runs: acc.runs,
     balls_faced: acc.balls_faced,
@@ -350,16 +431,84 @@ export interface ProcessZipPerMatchResult {
 }
 
 /**
+<<<<<<< HEAD
+=======
+ * Process a single Cricsheet match JSON file (not a ZIP).
+ * Returns a ProcessZipPerMatchResult with exactly one match entry on success.
+ *
+ * @param jsonBuffer  Raw bytes of a single Cricsheet match JSON file
+ * @param filename    Original filename (used to derive matchId, e.g. "1234567.json")
+ * @param season      If supplied and the match season doesn't match, returns 0 processed
+ * @param uuidMap      Optional UUID → full-name map (from final_mapping.json)
+ * @param shortNameMap Optional normalised-short-name → full-name fallback map
+ */
+export function processSingleMatchJson(
+  jsonBuffer: Buffer,
+  filename: string,
+  season?: string,
+  uuidMap?: Map<string, string>,
+  shortNameMap?: Map<string, string>,
+): ProcessZipPerMatchResult {
+  let match: CricsheetMatch;
+  try {
+    match = JSON.parse(jsonBuffer.toString("utf8")) as CricsheetMatch;
+  } catch {
+    return { matches: [], matchesProcessed: 0, matchesSkipped: 1, seasons: [] };
+  }
+
+  const matchSeason = String(match.info.season ?? "");
+  if (season && matchSeason !== season) {
+    return { matches: [], matchesProcessed: 0, matchesSkipped: 1, seasons: [] };
+  }
+
+  const eventName = (match.info.event?.name ?? match.info.competition ?? "").toLowerCase();
+  if (!eventName.includes("indian premier league") && !eventName.includes("ipl")) {
+    return { matches: [], matchesProcessed: 0, matchesSkipped: 1, seasons: [] };
+  }
+
+  const matchStats = new Map<string, CricsheetAccumulator>();
+  processMatch(match, matchStats, uuidMap, shortNameMap);
+
+  const playerStats: Record<string, PlayerMatchStats> = {};
+  for (const [name, acc] of matchStats) {
+    playerStats[name] = accumulatorToMatchStats(acc);
+  }
+
+  // matchId from filename (strip extension and any directory prefix)
+  const matchId = filename.replace(/^.*[\\/]/, "").replace(/\.json$/i, "");
+  const matchDate = (match.info.dates ?? [])[0] ?? matchSeason;
+
+  return {
+    matches: [{ matchId, matchDate, season: matchSeason || (season ?? ""), playerStats }],
+    matchesProcessed: 1,
+    matchesSkipped: 0,
+    seasons: matchSeason ? [matchSeason] : [],
+  };
+}
+
+/**
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
  * Parse a Cricsheet ZIP buffer and return ONE entry PER MATCH.
  * Each entry contains per-player stats in the PlayerMatchStats wire format
  * so they can be upserted directly into match_results.
  *
  * @param zipBuffer  Raw bytes of the Cricsheet IPL JSON zip
  * @param season     If supplied, only process matches for this season (e.g. "2026")
+<<<<<<< HEAD
+=======
+ * @param nameMap    Optional: normalised-short-name → full name. Translates Cricsheet
+ *                   short names (e.g. "HH Pandya") to full names ("Hardik Pandya")
+ *                   so stats keys match the room's player names exactly.
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
  */
 export function processZipPerMatch(
   zipBuffer: Buffer,
   season?: string,
+<<<<<<< HEAD
+=======
+  uuidMap?: Map<string, string>,
+  shortNameMap?: Map<string, string>,
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 ): ProcessZipPerMatchResult {
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
@@ -398,7 +547,11 @@ export function processZipPerMatch(
 
     // Process this match in isolation
     const matchStats = new Map<string, CricsheetAccumulator>();
+<<<<<<< HEAD
     processMatch(match, matchStats);
+=======
+    processMatch(match, matchStats, uuidMap, shortNameMap);
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 
     // Convert to PlayerMatchStats shape
     const playerStats: Record<string, PlayerMatchStats> = {};
@@ -434,6 +587,11 @@ export function processZipPerMatch(
 export function processZip(
   zipBuffer: Buffer,
   season?: string,
+<<<<<<< HEAD
+=======
+  uuidMap?: Map<string, string>,
+  shortNameMap?: Map<string, string>,
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 ): ProcessZipResult {
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
@@ -470,7 +628,11 @@ export function processZip(
 
     if (matchSeason) seenSeasons.add(matchSeason);
 
+<<<<<<< HEAD
     processMatch(match, stats);
+=======
+    processMatch(match, stats, uuidMap, shortNameMap);
+>>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
     matchesProcessed += 1;
   }
 

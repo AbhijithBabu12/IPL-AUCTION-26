@@ -19,6 +19,7 @@ interface SyncResult {
 export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"fetch" | "upload">("fetch");
+  const [mode, setMode] = useState<"fetch" | "upload" | "json">("fetch");
   const [season, setSeason] = useState("2026");
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<SyncResult | null>(null);
@@ -36,6 +37,10 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
         const file = fileRef.current?.files?.[0];
         if (!file) {
           setError("Select the ipl_json.zip file first.");
+      if (mode === "upload" || mode === "json") {
+        const file = fileRef.current?.files?.[0];
+        if (!file) {
+          setError(mode === "json" ? "Select a .json match file first." : "Select the ipl_json.zip file first.");
           setPending(false);
           return;
         }
@@ -91,6 +96,7 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
           type="button"
         >
           Auto-fetch from Cricsheet
+          Auto-fetch
         </button>
         <button
           className={`button ${mode === "upload" ? "" : "ghost"}`}
@@ -99,6 +105,14 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
           type="button"
         >
           Upload ZIP
+        </button>
+        <button
+          className={`button ${mode === "json" ? "" : "ghost"}`}
+          disabled={pending}
+          onClick={() => setMode("json")}
+          type="button"
+        >
+          Upload JSON
         </button>
       </div>
 
@@ -113,6 +127,7 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
         <div className="field">
           <label htmlFor="cricsheet-zip">
             ipl_json.zip — download from{" "}
+            Full season ZIP — download from{" "}
             <span className="mono">cricsheet.org/downloads/ipl_json.zip</span>
           </label>
           <input
@@ -120,6 +135,23 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
             className="input"
             disabled={pending}
             id="cricsheet-zip"
+            ref={fileRef}
+            type="file"
+          />
+        </div>
+      )}
+
+      {mode === "json" && (
+        <div className="field">
+          <label htmlFor="cricsheet-json">
+            Single match JSON — download individual match files from{" "}
+            <span className="mono">cricsheet.org/matches/ipl/</span>
+          </label>
+          <input
+            accept=".json"
+            className="input"
+            disabled={pending}
+            id="cricsheet-json"
             ref={fileRef}
             type="file"
           />
@@ -159,6 +191,11 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
         type="button"
       >
         {pending ? "Syncing Cricsheet data…" : "Sync Cricsheet data"}
+        {pending
+          ? "Syncing…"
+          : mode === "json"
+          ? "Sync match JSON"
+          : "Sync Cricsheet data"}
       </button>
     </div>
   );
