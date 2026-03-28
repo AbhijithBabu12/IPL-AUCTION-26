@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useRef, useState } from "react";
 
@@ -18,7 +18,6 @@ interface SyncResult {
 
 export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<"fetch" | "upload">("fetch");
   const [mode, setMode] = useState<"fetch" | "upload" | "json">("fetch");
   const [season, setSeason] = useState("2026");
   const [pending, setPending] = useState(false);
@@ -31,39 +30,37 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
     setError(null);
 
     try {
-      let res: Response;
+      let response: Response;
 
-      if (mode === "upload") {
-        const file = fileRef.current?.files?.[0];
-        if (!file) {
-          setError("Select the ipl_json.zip file first.");
       if (mode === "upload" || mode === "json") {
         const file = fileRef.current?.files?.[0];
         if (!file) {
-          setError(mode === "json" ? "Select a .json match file first." : "Select the ipl_json.zip file first.");
+          setError(mode === "json" ? "Select a JSON match file first." : "Select the IPL ZIP file first.");
           setPending(false);
           return;
         }
+
         const form = new FormData();
         form.append("file", file);
         form.append("season", season);
-        res = await fetch(`/api/rooms/${roomCode}/cricsheet-sync`, {
+        response = await fetch(`/api/rooms/${roomCode}/cricsheet-sync`, {
           method: "POST",
           body: form,
         });
       } else {
-        res = await fetch(`/api/rooms/${roomCode}/cricsheet-sync`, {
+        response = await fetch(`/api/rooms/${roomCode}/cricsheet-sync`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ season }),
         });
       }
 
-      const payload = (await res.json()) as SyncResult;
-      if (!res.ok) throw new Error(payload.error ?? "Sync failed.");
+      const payload = (await response.json()) as SyncResult;
+      if (!response.ok) throw new Error(payload.error ?? "Sync failed.");
+
       setResult(payload);
 
-      if (payload.playersMatched && payload.playersMatched > 0) {
+      if ((payload.playersMatched ?? 0) > 0) {
         setTimeout(() => window.location.reload(), 1200);
       }
     } catch (err) {
@@ -76,11 +73,11 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
   return (
     <div className="form-grid">
       <div className="field">
-        <label>IPL Season</label>
+        <label>IPL season</label>
         <input
           className="input"
           disabled={pending}
-          onChange={(e) => setSeason(e.target.value)}
+          onChange={(event) => setSeason(event.target.value)}
           placeholder="e.g. 2026"
           style={{ maxWidth: "8rem" }}
           type="text"
@@ -95,7 +92,6 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
           onClick={() => setMode("fetch")}
           type="button"
         >
-          Auto-fetch from Cricsheet
           Auto-fetch
         </button>
         <button
@@ -118,17 +114,15 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
 
       {mode === "fetch" && (
         <p className="subtle" style={{ fontSize: "0.85rem" }}>
-          Downloads <span className="mono">ipl_json.zip</span> directly from cricsheet.org and
-          processes all {season} season matches. May take 15–30 seconds.
+          Downloads the IPL ZIP from Cricsheet and syncs the {season} season. This can take
+          around 15-30 seconds.
         </p>
       )}
 
       {mode === "upload" && (
         <div className="field">
           <label htmlFor="cricsheet-zip">
-            ipl_json.zip — download from{" "}
-            Full season ZIP — download from{" "}
-            <span className="mono">cricsheet.org/downloads/ipl_json.zip</span>
+            Full season ZIP from <span className="mono">cricsheet.org/downloads/ipl_json.zip</span>
           </label>
           <input
             accept=".zip"
@@ -144,8 +138,7 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
       {mode === "json" && (
         <div className="field">
           <label htmlFor="cricsheet-json">
-            Single match JSON — download individual match files from{" "}
-            <span className="mono">cricsheet.org/matches/ipl/</span>
+            Single match JSON from <span className="mono">cricsheet.org/matches/ipl/</span>
           </label>
           <input
             accept=".json"
@@ -160,7 +153,7 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
 
       {result?.ok && (
         <div className="notice success">
-          <strong>Sync complete — {result.season} season</strong>
+          <strong>Sync complete for {result.season}</strong>
           <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
             <span className="pill">{result.matchesProcessed} matches processed</span>
             <span className="pill highlight">{result.playersMatched} players matched</span>
@@ -170,18 +163,14 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
           </div>
           {result.unmatchedNames && result.unmatchedNames.length > 0 && (
             <div className="subtle" style={{ marginTop: "0.5rem", fontSize: "0.78rem" }}>
-              <strong>Unmatched players</strong> (check spelling in your sheet):{" "}
-              {result.unmatchedNames.join(", ")}
-              {(result.playersUnmatched ?? 0) > result.unmatchedNames.length ? " …" : ""}
+              <strong>Unmatched players:</strong> {result.unmatchedNames.join(", ")}
+              {(result.playersUnmatched ?? 0) > result.unmatchedNames.length ? " ..." : ""}
             </div>
           )}
         </div>
       )}
 
-      {result && !result.ok && (
-        <div className="notice warning">{result.error}</div>
-      )}
-
+      {result && !result.ok && <div className="notice warning">{result.error}</div>}
       {error && <div className="notice warning">{error}</div>}
 
       <button
@@ -190,12 +179,11 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
         onClick={() => void handleSync()}
         type="button"
       >
-        {pending ? "Syncing Cricsheet data…" : "Sync Cricsheet data"}
         {pending
-          ? "Syncing…"
+          ? "Syncing..."
           : mode === "json"
-          ? "Sync match JSON"
-          : "Sync Cricsheet data"}
+            ? "Sync match JSON"
+            : "Sync Cricsheet data"}
       </button>
     </div>
   );

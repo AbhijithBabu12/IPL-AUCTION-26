@@ -1,154 +1,101 @@
-/**
+﻿/**
  * POST /api/rooms/[code]/cricsheet-sync
  *
- * Parses a Cricsheet IPL ZIP (uploaded or auto-fetched from cricsheet.org),
- * upserts ONE row per match into `match_results` (source="cricsheet", accepted=true),
- * then immediately aggregates ALL accepted rows for the season and writes
- * season totals into `players.stats` — so results appear without any extra step.
- *
- * Re-running is safe: existing rows get fresh player_stats; accepted=true is
- * preserved, and the final aggregation reflects all accepted data (including
- * rows from other sources like webscrape).
- *
- * Body (JSON):  { season?: string }
- * Body (form):  multipart/form-data with fields `file` (ZIP) and `season`
+ * Parses a Cricsheet IPL ZIP or single JSON file, upserts one row per match
+ * into match_results, and then re-aggregates accepted rows into players.stats.
  */
 
-<<<<<<< HEAD
-=======
 import fs from "fs";
 import path from "path";
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
+
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
+import type { PlayerStats } from "@/lib/domain/scoring";
 import { AppError } from "@/lib/domain/errors";
 import { handleRouteError } from "@/lib/server/api";
 import { requireApiUser } from "@/lib/server/auth";
-<<<<<<< HEAD
-import { processZipPerMatch } from "@/lib/server/cricsheet";
-=======
-import { processZipPerMatch, processSingleMatchJson } from "@/lib/server/cricsheet";
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
+import { processSingleMatchJson, processZipPerMatch } from "@/lib/server/cricsheet";
 import { requireRoomAdmin } from "@/lib/server/room";
 import type { PlayerMatchStats } from "@/lib/server/webscrape/parser";
-import type { PlayerStats } from "@/lib/domain/scoring";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
-<<<<<<< HEAD
-=======
-// ── Cricsheet short-name → full-name translation map ─────────────────────────
-// Built once at module load from final_mapping.json in the project root.
-// Maps normalised short name (e.g. "hh pandya") → full name ("Hardik Pandya").
+interface MappingEntry {
+  short_name: string;
+  full_name: string;
+}
 
-interface MappingEntry { short_name: string; full_name: string; }
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+}
 
 function buildUuidMap(): Map<string, string> {
   const map = new Map<string, string>();
+
   try {
-    const raw = fs.readFileSync(
-      path.join(process.cwd(), "final_mapping.json"),
-      "utf8",
-    );
-    // Top-level keys ARE the Cricsheet registry UUIDs — map uuid → full_name directly.
+    const raw = fs.readFileSync(path.join(process.cwd(), "final_mapping.json"), "utf8");
     const entries = JSON.parse(raw) as Record<string, MappingEntry>;
-    for (const [uuid, { full_name }] of Object.entries(entries)) {
-      if (uuid && full_name) map.set(uuid, full_name);
+
+    for (const [uuid, value] of Object.entries(entries)) {
+      if (!uuid || !value?.full_name) continue;
+      map.set(uuid, value.full_name);
+      map.set(uuid.slice(0, 8), value.full_name);
     }
-    console.log(`[cricsheet-sync] UUID map loaded: ${map.size} entries from final_mapping.json`);
-  } catch (err) {
-    console.error("[cricsheet-sync] failed to load final_mapping.json — player names will not be translated:", err);
+  } catch (error) {
+    console.error("[cricsheet-sync] failed to load final_mapping.json", error);
   }
+
+  return map;
+}
+
+function buildShortNameMap(): Map<string, string> {
+  const map = new Map<string, string>();
+
+  try {
+    const raw = fs.readFileSync(path.join(process.cwd(), "final_mapping.json"), "utf8");
+    const entries = JSON.parse(raw) as Record<string, MappingEntry>;
+
+    for (const value of Object.values(entries)) {
+      if (!value?.short_name || !value?.full_name) continue;
+      map.set(normalizeName(value.short_name), value.full_name);
+    }
+  } catch {
+    // Silent fallback: UUID load already logs the root error.
+  }
+
   return map;
 }
 
 const CRICSHEET_UUID_MAP = buildUuidMap();
-
-/** Fallback: normalised short name → full name (for JSONs without registry.people). */
-function buildShortNameMap(): Map<string, string> {
-  const map = new Map<string, string>();
-  try {
-    const raw = fs.readFileSync(path.join(process.cwd(), "final_mapping.json"), "utf8");
-    const entries = JSON.parse(raw) as Record<string, MappingEntry>;
-    for (const { short_name, full_name } of Object.values(entries)) {
-      if (short_name && full_name) {
-        const key = short_name.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
-        map.set(key, full_name);
-      }
-    }
-  } catch { /* silent — UUID map already logged the error */ }
-  return map;
-}
-
 const CRICSHEET_SHORT_MAP = buildShortNameMap();
 
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 export const dynamic = "force-dynamic";
 
-// ── Name normalisation ────────────────────────────────────────────────────────
-
-function normaliseName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\./g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-<<<<<<< HEAD
-=======
-/**
- * Returns true if a normalised stats key looks like a Cricsheet short-name:
- * first token is 1–2 characters (initials), e.g. "b kumar", "kh pandya".
- */
 function isShortNameFormat(normKey: string): boolean {
   const parts = normKey.split(" ");
   return parts.length >= 2 && (parts[0]?.length ?? 0) <= 2;
 }
 
-/**
- * Match a DB player's normalised full name against a short-name stats key.
- *
- * Rules:
- *  1. Surnames must be identical.
- *  2. Each character in the stats-key initials must match the first letter of
- *     the corresponding name part in the DB player (only as many as the DB
- *     player has — middle-name initials in Cricsheet are ignored when the DB
- *     name has no middle name).
- *
- * Examples:
- *   "kh pandya" vs "krunal pandya"   → true  (K=K, surname pandya=pandya)
- *   "kh pandya" vs "hardik pandya"   → false (K≠H)
- *   "hh pandya" vs "hardik pandya"   → true  (H=H)
- *   "b kumar"   vs "bhuvneshwar kumar" → true  (B=B)
- *   "b kumar"   vs "mukesh kumar"    → false (B≠M)
- *   "b kumar"   vs "ashwani kumar"   → false (B≠A)
- */
 function matchesShortName(statsNormKey: string, dbNormKey: string): boolean {
-  const sParts = statsNormKey.split(" ");
-  const dParts = dbNormKey.split(" ");
-  if (sParts.length < 2 || dParts.length < 2) return false;
+  const statParts = statsNormKey.split(" ");
+  const dbParts = dbNormKey.split(" ");
 
-  // Surnames must match exactly
-  if (sParts[sParts.length - 1] !== dParts[dParts.length - 1]) return false;
+  if (statParts.length < 2 || dbParts.length < 2) return false;
 
-  // Initials string from stats key, e.g. "kh" or "b"
-  const sInitials = sParts.slice(0, -1).join("");
-  // First-name parts from DB player, e.g. ["krunal"] or ["bhuvneshwar"]
-  const dFirstNames = dParts.slice(0, -1);
+  const statSurname = statParts[statParts.length - 1];
+  const dbSurname = dbParts[dbParts.length - 1];
+  if (statSurname !== dbSurname) return false;
 
-  // Check each initial against the corresponding DB name part
-  // Only check as many as the DB player has first-name parts (skip extra middle-name initials)
-  const checkLen = Math.min(sInitials.length, dFirstNames.length);
-  for (let i = 0; i < checkLen; i++) {
-    if (sInitials[i] !== dFirstNames[i]![0]) return false;
+  const statInitials = statParts.slice(0, -1).join("");
+  const dbFirstParts = dbParts.slice(0, -1);
+  const checkLength = Math.min(statInitials.length, dbFirstParts.length);
+
+  for (let index = 0; index < checkLength; index += 1) {
+    if (statInitials[index] !== dbFirstParts[index]?.[0]) return false;
   }
+
   return true;
 }
-
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
-// ── Aggregate PlayerMatchStats → season PlayerStats ───────────────────────────
-// Identical logic to webscrape-accept so the same data shape is written.
 
 function aggregateToPlayerStats(
   allMatchStats: Array<Record<string, PlayerMatchStats>>,
@@ -156,59 +103,73 @@ function aggregateToPlayerStats(
   const season: Record<string, PlayerStats> = {};
 
   for (const matchStats of allMatchStats) {
-    for (const [playerName, m] of Object.entries(matchStats)) {
+    for (const [playerName, stats] of Object.entries(matchStats)) {
       if (!playerName) continue;
 
       if (!season[playerName]) {
         season[playerName] = {
-          runs: 0, balls_faced: 0, fours: 0, sixes: 0, ducks: 0,
-          wickets: 0, balls_bowled: 0, runs_conceded: 0,
-          dot_balls: 0, maiden_overs: 0, lbw_bowled_wickets: 0,
-          catches: 0, stumpings: 0, run_outs_direct: 0, run_outs_indirect: 0,
-          milestone_runs_pts: 0, milestone_wkts_pts: 0,
-          sr_pts: 0, economy_pts: 0, catch_bonus_pts: 0,
-          lineup_appearances: 0, substitute_appearances: 0, matches_played: 0,
+          runs: 0,
+          balls_faced: 0,
+          fours: 0,
+          sixes: 0,
+          ducks: 0,
+          wickets: 0,
+          balls_bowled: 0,
+          runs_conceded: 0,
+          dot_balls: 0,
+          maiden_overs: 0,
+          lbw_bowled_wickets: 0,
+          catches: 0,
+          stumpings: 0,
+          run_outs_direct: 0,
+          run_outs_indirect: 0,
+          milestone_runs_pts: 0,
+          milestone_wkts_pts: 0,
+          sr_pts: 0,
+          economy_pts: 0,
+          catch_bonus_pts: 0,
+          lineup_appearances: 0,
+          substitute_appearances: 0,
+          matches_played: 0,
         };
       }
-      const s = season[playerName]!;
 
-      s.runs            = (s.runs            ?? 0) + (m.runs            ?? 0);
-      s.balls_faced     = (s.balls_faced     ?? 0) + (m.balls_faced     ?? 0);
-      s.fours           = (s.fours           ?? 0) + (m.fours           ?? 0);
-      s.sixes           = (s.sixes           ?? 0) + (m.sixes           ?? 0);
+      const target = season[playerName]!;
+      target.runs = (target.runs ?? 0) + (stats.runs ?? 0);
+      target.balls_faced = (target.balls_faced ?? 0) + (stats.balls_faced ?? 0);
+      target.fours = (target.fours ?? 0) + (stats.fours ?? 0);
+      target.sixes = (target.sixes ?? 0) + (stats.sixes ?? 0);
 
-      if (m.dismissed && (m.runs ?? 0) === 0) {
-        s.ducks = (s.ducks ?? 0) + 1;
+      if (stats.dismissed && (stats.runs ?? 0) === 0) {
+        target.ducks = (target.ducks ?? 0) + 1;
       }
 
-      s.wickets          = (s.wickets          ?? 0) + (m.wickets          ?? 0);
-      s.balls_bowled     = (s.balls_bowled     ?? 0) + (m.balls_bowled     ?? 0);
-      s.runs_conceded    = (s.runs_conceded    ?? 0) + (m.runs_conceded    ?? 0);
-      s.maiden_overs     = (s.maiden_overs     ?? 0) + (m.maiden_overs     ?? 0);
-      s.lbw_bowled_wickets = (s.lbw_bowled_wickets ?? 0) + (m.lbw_bowled_wickets ?? 0);
+      target.wickets = (target.wickets ?? 0) + (stats.wickets ?? 0);
+      target.balls_bowled = (target.balls_bowled ?? 0) + (stats.balls_bowled ?? 0);
+      target.runs_conceded = (target.runs_conceded ?? 0) + (stats.runs_conceded ?? 0);
+      target.maiden_overs = (target.maiden_overs ?? 0) + (stats.maiden_overs ?? 0);
+      target.lbw_bowled_wickets =
+        (target.lbw_bowled_wickets ?? 0) + (stats.lbw_bowled_wickets ?? 0);
+      target.catches = (target.catches ?? 0) + (stats.catches ?? 0);
+      target.stumpings = (target.stumpings ?? 0) + (stats.stumpings ?? 0);
+      target.run_outs_direct = (target.run_outs_direct ?? 0) + (stats.run_outs ?? 0);
+      target.milestone_runs_pts =
+        (target.milestone_runs_pts ?? 0) + (stats.milestone_runs_pts ?? 0);
+      target.milestone_wkts_pts =
+        (target.milestone_wkts_pts ?? 0) + (stats.milestone_wkts_pts ?? 0);
+      target.sr_pts = (target.sr_pts ?? 0) + (stats.sr_pts ?? 0);
+      target.economy_pts = (target.economy_pts ?? 0) + (stats.economy_pts ?? 0);
+      target.catch_bonus_pts = (target.catch_bonus_pts ?? 0) + (stats.catch_bonus_pts ?? 0);
 
-      s.catches          = (s.catches          ?? 0) + (m.catches          ?? 0);
-      s.stumpings        = (s.stumpings        ?? 0) + (m.stumpings        ?? 0);
-      // Cricsheet does distinguish direct/indirect — store in run_outs_direct
-      s.run_outs_direct  = (s.run_outs_direct  ?? 0) + (m.run_outs         ?? 0);
-
-      s.milestone_runs_pts = (s.milestone_runs_pts ?? 0) + (m.milestone_runs_pts ?? 0);
-      s.milestone_wkts_pts = (s.milestone_wkts_pts ?? 0) + (m.milestone_wkts_pts ?? 0);
-      s.sr_pts           = (s.sr_pts           ?? 0) + (m.sr_pts           ?? 0);
-      s.economy_pts      = (s.economy_pts      ?? 0) + (m.economy_pts      ?? 0);
-      s.catch_bonus_pts  = (s.catch_bonus_pts  ?? 0) + (m.catch_bonus_pts  ?? 0);
-
-      if (m.appeared) {
-        s.lineup_appearances = (s.lineup_appearances ?? 0) + 1;
-        s.matches_played     = (s.matches_played     ?? 0) + 1;
+      if (stats.appeared) {
+        target.lineup_appearances = (target.lineup_appearances ?? 0) + 1;
+        target.matches_played = (target.matches_played ?? 0) + 1;
       }
     }
   }
 
   return season;
 }
-
-// ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(
   request: Request,
@@ -220,30 +181,21 @@ export async function POST(
     const { room } = await requireRoomAdmin(code, authUser.id);
     const admin = getSupabaseAdminClient();
 
-<<<<<<< HEAD
-    // ── Get ZIP buffer ────────────────────────────────────────────────────────
-    let zipBuffer: Buffer;
-    let season: string;
-=======
-    // ── Get file buffer ───────────────────────────────────────────────────────
     let fileBuffer: Buffer;
     let season: string;
-    let uploadedFilename = ""; // only set for file uploads
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
+    let uploadedFilename = "";
 
-    const ct = request.headers.get("content-type") ?? "";
+    const contentType = request.headers.get("content-type") ?? "";
 
-    if (ct.includes("multipart/form-data")) {
+    if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
       const file = form.get("file") as File | null;
       season = String(form.get("season") || "2026");
+
       if (!file) throw new AppError("No file uploaded.", 400, "NO_FILE");
-<<<<<<< HEAD
-      zipBuffer = Buffer.from(await file.arrayBuffer());
-=======
+
       fileBuffer = Buffer.from(await file.arrayBuffer());
       uploadedFilename = file.name;
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
     } else {
       const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
       season = String(body.season ?? "2026");
@@ -253,41 +205,40 @@ export async function POST(
         "https://cricsheet.org/downloads/ipl_json.zip",
       ];
 
-      let fetchRes: Response | null = null;
+      let fetchResponse: Response | null = null;
       for (const url of urls) {
-        const res = await fetch(url, {
+        const response = await fetch(url, {
           headers: { "User-Agent": "IPL-Auction-Platform/1.0 (fantasy-scoring)" },
           signal: AbortSignal.timeout(90_000),
         });
-        if (res.ok) { fetchRes = res; break; }
+
+        if (response.ok) {
+          fetchResponse = response;
+          break;
+        }
       }
 
-      if (!fetchRes) {
+      if (!fetchResponse) {
         throw new AppError(
-          "Could not fetch IPL data from Cricsheet. Try uploading the ZIP manually.",
+          "Could not fetch IPL data from Cricsheet. Try uploading the file manually.",
           502,
           "CRICSHEET_FETCH_FAILED",
         );
       }
 
-<<<<<<< HEAD
-      zipBuffer = Buffer.from(await fetchRes.arrayBuffer());
+      fileBuffer = Buffer.from(await fetchResponse.arrayBuffer());
     }
 
-    // ── Parse ZIP into per-match entries ──────────────────────────────────────
-    const { matches, matchesProcessed, matchesSkipped, seasons } =
-      processZipPerMatch(zipBuffer, season);
-=======
-      fileBuffer = Buffer.from(await fetchRes.arrayBuffer());
-    }
-
-    // ── Parse file into per-match entries ─────────────────────────────────────
-    // Single .json file → one match; .zip file (or auto-fetch) → all matches
     const isJsonUpload = uploadedFilename.toLowerCase().endsWith(".json");
     const { matches, matchesProcessed, matchesSkipped, seasons } = isJsonUpload
-      ? processSingleMatchJson(fileBuffer, uploadedFilename, season, CRICSHEET_UUID_MAP, CRICSHEET_SHORT_MAP)
+      ? processSingleMatchJson(
+          fileBuffer,
+          uploadedFilename,
+          season,
+          CRICSHEET_UUID_MAP,
+          CRICSHEET_SHORT_MAP,
+        )
       : processZipPerMatch(fileBuffer, season, CRICSHEET_UUID_MAP, CRICSHEET_SHORT_MAP);
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
 
     if (matchesProcessed === 0) {
       return NextResponse.json(
@@ -302,139 +253,110 @@ export async function POST(
       );
     }
 
-    // ── Upsert each match into match_results (accepted=true) ──────────────────
-    // Always accepted=true so results update immediately after sync.
-    // Re-running updates player_stats for existing rows without downgrading
-    // an admin-chosen accepted=false (there's no reason Cricsheet rows would
-    // ever be rejected once processed, but we preserve explicit false values
-    // only for webscrape rows — Cricsheet is the authoritative ball-by-ball source).
     let upserted = 0;
     let upsertErrors = 0;
 
-    for (const m of matches) {
+    for (const match of matches) {
       const { data: existing } = await admin
         .from("match_results")
         .select("id")
         .eq("room_id", room.id)
-        .eq("match_id", m.matchId)
+        .eq("match_id", match.matchId)
         .eq("source", "cricsheet")
-        .eq("season", m.season || season)
+        .eq("season", match.season || season)
         .maybeSingle();
 
       const { error } = existing
         ? await admin
             .from("match_results")
             .update({
-              match_date: m.matchDate,
-              player_stats: m.playerStats as unknown as Record<string, unknown>,
+              match_date: match.matchDate,
+              player_stats: match.playerStats as unknown as Record<string, unknown>,
               accepted: true,
               accepted_at: new Date().toISOString(),
             })
             .eq("id", existing.id as string)
         : await admin.from("match_results").insert({
             room_id: room.id,
-            match_id: m.matchId,
+            match_id: match.matchId,
             source: "cricsheet" as const,
-            season: m.season || season,
-            match_date: m.matchDate,
-            player_stats: m.playerStats as unknown as Record<string, unknown>,
+            season: match.season || season,
+            match_date: match.matchDate,
+            player_stats: match.playerStats as unknown as Record<string, unknown>,
             accepted: true,
             accepted_at: new Date().toISOString(),
           });
 
       if (error) {
-        console.error(`cricsheet-sync: failed to upsert match ${m.matchId}:`, error.message);
+        console.error(`[cricsheet-sync] failed to upsert match ${match.matchId}:`, error.message);
         upsertErrors += 1;
       } else {
         upserted += 1;
       }
     }
 
-    // ── Aggregate ALL accepted rows for this room+season → players.stats ──────
-    // This mirrors exactly what webscrape-accept does so the Results board
-    // reflects the full picture (cricsheet rows + any accepted webscrape rows).
-    const { data: acceptedRows, error: fetchErr } = await admin
+    const { data: acceptedRows, error: fetchError } = await admin
       .from("match_results")
       .select("match_id, player_stats")
       .eq("room_id", room.id)
       .eq("season", season)
       .eq("accepted", true);
 
-    if (fetchErr) throw new AppError(fetchErr.message, 500, "DB_QUERY_FAILED");
+    if (fetchError) throw new AppError(fetchError.message, 500, "DB_QUERY_FAILED");
 
     const allMatchStats = (acceptedRows ?? []).map(
       (row) => (row.player_stats ?? {}) as Record<string, PlayerMatchStats>,
     );
     const aggregated = aggregateToPlayerStats(allMatchStats);
 
-    // Build normalised name lookup
     const normToOriginal = new Map<string, string>();
     for (const name of Object.keys(aggregated)) {
-      normToOriginal.set(normaliseName(name), name);
+      normToOriginal.set(normalizeName(name), name);
     }
 
-<<<<<<< HEAD
-    // Fetch room players and update stats
-    const { data: players, error: playersErr } = await admin
-      .from("players")
-      .select("id, name, stats")
-=======
-    // Build full_name → uuid reverse map so we can store the UUID after a name match
     const fullNameToUuid = new Map<string, string>();
-    for (const [uuid, fullName] of CRICSHEET_UUID_MAP) {
-      fullNameToUuid.set(fullName, uuid);
+    for (const [uuid, fullName] of CRICSHEET_UUID_MAP.entries()) {
+      if (uuid.length === 8) fullNameToUuid.set(fullName, uuid);
     }
 
-    // Fetch room players (include cricsheet_uuid for UUID-first matching)
-    const { data: players, error: playersErr } = await admin
+    const { data: players, error: playersError } = await admin
       .from("players")
       .select("id, name, stats, cricsheet_uuid")
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
       .eq("room_id", room.id);
 
-    if (playersErr) throw new AppError(playersErr.message, 500, "DB_QUERY_FAILED");
+    if (playersError) throw new AppError(playersError.message, 500, "DB_QUERY_FAILED");
 
     let matched = 0;
     const unmatched: string[] = [];
 
     for (const player of players ?? []) {
       const playerName = String(player.name);
-      const normKey = normaliseName(playerName);
+      const normKey = normalizeName(playerName);
+      const storedUuid = (player as { cricsheet_uuid?: string | null }).cricsheet_uuid;
 
-<<<<<<< HEAD
-      // 1 — exact normalised match
-      let statsKey = normToOriginal.get(normKey);
-
-      // 2 — surname fallback (unambiguous only)
-=======
-      // 0 — UUID match (stored from a previous sync — perfectly stable, no string matching)
       let statsKey: string | undefined;
-      const storedUuid = player.cricsheet_uuid as string | null | undefined;
+
       if (storedUuid) {
         const fullName = CRICSHEET_UUID_MAP.get(storedUuid);
-        if (fullName && aggregated[fullName] !== undefined) statsKey = fullName;
+        if (fullName && aggregated[fullName]) statsKey = fullName;
       }
 
-      // 1 — exact normalised match
       if (!statsKey) statsKey = normToOriginal.get(normKey);
 
-      // 2 — initial-based match for stats keys in "B Kumar" / "KH Pandya" format
       if (!statsKey) {
         const initCandidates = Array.from(normToOriginal.entries()).filter(
-          ([k]) => isShortNameFormat(k) && matchesShortName(k, normKey),
+          ([key]) => isShortNameFormat(key) && matchesShortName(key, normKey),
         );
-        if (initCandidates.length === 1) statsKey = initCandidates[0]![1];
+        if (initCandidates.length === 1) statsKey = initCandidates[0]?.[1];
       }
 
-      // 3 — surname fallback (unambiguous only, last resort)
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
       if (!statsKey) {
         const surname = normKey.split(" ").pop() ?? "";
         if (surname.length >= 3) {
-          const hits = Array.from(normToOriginal.entries()).filter(([k]) =>
-            k.split(" ").pop() === surname,
+          const surnameHits = Array.from(normToOriginal.entries()).filter(
+            ([key]) => key.split(" ").pop() === surname,
           );
-          if (hits.length === 1) statsKey = hits[0]![1];
+          if (surnameHits.length === 1) statsKey = surnameHits[0]?.[1];
         }
       }
 
@@ -445,12 +367,6 @@ export async function POST(
 
       const agg = aggregated[statsKey]!;
       const existing = (player.stats ?? {}) as Record<string, unknown>;
-
-<<<<<<< HEAD
-      // Overlay aggregated stats, preserve metadata (ipl_team, crisheet_name, etc.)
-=======
-      // Overlay aggregated stats, preserve metadata (ipl_team, etc.)
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
       const newStats: Record<string, unknown> = {
         ...existing,
         runs: agg.runs,
@@ -476,21 +392,20 @@ export async function POST(
         matches_played: agg.matches_played,
       };
 
-<<<<<<< HEAD
-      await admin
-        .from("players")
-        .update({ stats: newStats })
-=======
-      // Store UUID on first successful match so future syncs use UUID directly
-      const resolvedUuid = fullNameToUuid.get(statsKey);
       const updatePayload: Record<string, unknown> = { stats: newStats };
+      const resolvedUuid = fullNameToUuid.get(statsKey);
       if (resolvedUuid && !storedUuid) updatePayload.cricsheet_uuid = resolvedUuid;
 
-      await admin
+      const { error: updateError } = await admin
         .from("players")
         .update(updatePayload)
->>>>>>> 79b11be4df76e42dd6635415bddbdfe9cf2cff11
         .eq("id", player.id as string);
+
+      if (updateError) {
+        console.error(`[cricsheet-sync] failed to update player ${playerName}:`, updateError.message);
+        unmatched.push(playerName);
+        continue;
+      }
 
       matched += 1;
     }
@@ -507,6 +422,7 @@ export async function POST(
       matchesUpserted: upserted,
       matchesErrored: upsertErrors,
       totalAcceptedMatches: (acceptedRows ?? []).length,
+      playersMatched: matched,
       playersUpdated: matched,
       playersUnmatched: unmatched.length,
       unmatchedNames: unmatched.slice(0, 30),
