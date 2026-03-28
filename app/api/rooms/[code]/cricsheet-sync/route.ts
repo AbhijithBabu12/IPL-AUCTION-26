@@ -291,11 +291,13 @@ export async function POST(
       ? processSingleMatchJson(
           fileBuffer,
           uploadedFilename,
-          season,
+          undefined,
           CRICSHEET_UUID_MAP,
           CRICSHEET_SHORT_MAP,
         )
       : processZipPerMatch(fileBuffer, season, CRICSHEET_UUID_MAP, CRICSHEET_SHORT_MAP);
+
+    const aggregationSeason = isJsonUpload ? (matches[0]?.season || season) : season;
 
     if (matchesProcessed === 0) {
       return NextResponse.json(
@@ -320,7 +322,7 @@ export async function POST(
         .eq("room_id", room.id)
         .eq("match_id", match.matchId)
         .eq("source", "cricsheet")
-        .eq("season", match.season || season)
+        .eq("season", match.season || aggregationSeason)
         .maybeSingle();
 
       const { error } = existing
@@ -337,7 +339,7 @@ export async function POST(
             room_id: room.id,
             match_id: match.matchId,
             source: "cricsheet" as const,
-            season: match.season || season,
+            season: match.season || aggregationSeason,
             match_date: match.matchDate,
             player_stats: match.playerStats as unknown as Record<string, unknown>,
             accepted: true,
@@ -352,11 +354,13 @@ export async function POST(
       }
     }
 
+    const responseSeason = aggregationSeason;
+
     const { data: acceptedRows, error: fetchError } = await admin
       .from("match_results")
       .select("match_id, player_stats")
       .eq("room_id", room.id)
-      .eq("season", season)
+      .eq("season", aggregationSeason)
       .eq("accepted", true);
 
     if (fetchError) throw new AppError(fetchError.message, 500, "DB_QUERY_FAILED");
@@ -448,7 +452,7 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      season,
+      season: responseSeason,
       seasons,
       matchesProcessed,
       matchesSkipped,
