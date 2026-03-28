@@ -41,6 +41,29 @@ function normaliseName(name: string): string {
     .trim();
 }
 
+function isShortNameFormat(normKey: string): boolean {
+  const parts = normKey.split(" ");
+  return parts.length >= 2 && (parts[0]?.length ?? 0) <= 2;
+}
+
+function matchesShortName(statsNormKey: string, dbNormKey: string): boolean {
+  const statParts = statsNormKey.split(" ");
+  const dbParts = dbNormKey.split(" ");
+  if (statParts.length < 2 || dbParts.length < 2) return false;
+
+  if (statParts[statParts.length - 1] !== dbParts[dbParts.length - 1]) return false;
+
+  const statInitials = statParts.slice(0, -1).join("");
+  const dbFirstNames = dbParts.slice(0, -1);
+  const checkLen = Math.min(statInitials.length, dbFirstNames.length);
+
+  for (let i = 0; i < checkLen; i += 1) {
+    if (statInitials[i] !== dbFirstNames[i]![0]) return false;
+  }
+
+  return true;
+}
+
 // ── Aggregate PlayerMatchStats from all accepted rows into PlayerStats ─────────
 //
 // PlayerMatchStats (per-match from webscrape parser) → PlayerStats (season totals)
@@ -112,6 +135,63 @@ function aggregateToPlayerStats(
   }
 
   return season;
+}
+
+function buildSeasonStatsPayload(
+  existing: Record<string, unknown>,
+  stats?: PlayerStats,
+): Record<string, unknown> {
+  const source = stats ?? {
+    runs: 0,
+    balls_faced: 0,
+    fours: 0,
+    sixes: 0,
+    ducks: 0,
+    wickets: 0,
+    balls_bowled: 0,
+    runs_conceded: 0,
+    dot_balls: 0,
+    maiden_overs: 0,
+    lbw_bowled_wickets: 0,
+    catches: 0,
+    stumpings: 0,
+    run_outs_direct: 0,
+    run_outs_indirect: 0,
+    milestone_runs_pts: 0,
+    milestone_wkts_pts: 0,
+    sr_pts: 0,
+    economy_pts: 0,
+    catch_bonus_pts: 0,
+    lineup_appearances: 0,
+    substitute_appearances: 0,
+    matches_played: 0,
+  };
+
+  return {
+    ...existing,
+    runs: source.runs ?? 0,
+    balls_faced: source.balls_faced ?? 0,
+    fours: source.fours ?? 0,
+    sixes: source.sixes ?? 0,
+    ducks: source.ducks ?? 0,
+    wickets: source.wickets ?? 0,
+    balls_bowled: source.balls_bowled ?? 0,
+    runs_conceded: source.runs_conceded ?? 0,
+    maiden_overs: source.maiden_overs ?? 0,
+    lbw_bowled_wickets: source.lbw_bowled_wickets ?? 0,
+    catches: source.catches ?? 0,
+    stumpings: source.stumpings ?? 0,
+    run_outs_direct: source.run_outs_direct ?? 0,
+    run_outs_indirect: source.run_outs_indirect ?? 0,
+    milestone_runs_pts: source.milestone_runs_pts ?? 0,
+    milestone_wkts_pts: source.milestone_wkts_pts ?? 0,
+    sr_pts: source.sr_pts ?? 0,
+    economy_pts: source.economy_pts ?? 0,
+    catch_bonus_pts: source.catch_bonus_pts ?? 0,
+    lineup_appearances: source.lineup_appearances ?? 0,
+    substitute_appearances: source.substitute_appearances ?? 0,
+    matches_played: source.matches_played ?? 0,
+  };
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -223,56 +303,25 @@ export async function POST(
       // 1 – exact normalised match
       let statsKey = normToOriginal.get(normKey);
 
-      // 2 – surname fallback (unambiguous only)
+      // 2 – initial-based short-name match
       if (!statsKey) {
-        const surname = normKey.split(" ").pop() ?? "";
-        if (surname.length >= 3) {
-          const hits = Array.from(normToOriginal.entries()).filter(([k]) =>
-            k.split(" ").pop() === surname,
-          );
-          if (hits.length === 1) statsKey = hits[0]![1];
-        }
+        const initCandidates = Array.from(normToOriginal.entries()).filter(
+          ([key]) => isShortNameFormat(key) && matchesShortName(key, normKey),
+        );
+        if (initCandidates.length === 1) statsKey = initCandidates[0]![1];
       }
 
-      if (!statsKey) {
-        unmatched.push(playerName);
-        continue;
-      }
-
-      const webscrapeStats = aggregated[statsKey]!;
       const existing = (player.stats ?? {}) as Record<string, unknown>;
+      const webscrapeStats = statsKey ? aggregated[statsKey] : undefined;
 
-      // Overlay webscrape stats while preserving metadata (ipl_team, cricsheet_name, etc.)
-      const newStats: Record<string, unknown> = {
-        ...existing,
-        runs: webscrapeStats.runs,
-        balls_faced: webscrapeStats.balls_faced,
-        fours: webscrapeStats.fours,
-        sixes: webscrapeStats.sixes,
-        ducks: webscrapeStats.ducks,
-        wickets: webscrapeStats.wickets,
-        balls_bowled: webscrapeStats.balls_bowled,
-        runs_conceded: webscrapeStats.runs_conceded,
-        maiden_overs: webscrapeStats.maiden_overs,
-        lbw_bowled_wickets: webscrapeStats.lbw_bowled_wickets,
-        catches: webscrapeStats.catches,
-        stumpings: webscrapeStats.stumpings,
-        run_outs_indirect: webscrapeStats.run_outs_indirect,
-        milestone_runs_pts: webscrapeStats.milestone_runs_pts,
-        milestone_wkts_pts: webscrapeStats.milestone_wkts_pts,
-        sr_pts: webscrapeStats.sr_pts,
-        economy_pts: webscrapeStats.economy_pts,
-        catch_bonus_pts: webscrapeStats.catch_bonus_pts,
-        lineup_appearances: webscrapeStats.lineup_appearances,
-        matches_played: webscrapeStats.matches_played,
-      };
+      if (!statsKey) unmatched.push(playerName);
 
       await admin
         .from("players")
-        .update({ stats: newStats })
+        .update({ stats: buildSeasonStatsPayload(existing, webscrapeStats) })
         .eq("id", player.id as string);
 
-      matched += 1;
+      if (statsKey) matched += 1;
     }
 
     revalidatePath(`/room/${room.code}`);
