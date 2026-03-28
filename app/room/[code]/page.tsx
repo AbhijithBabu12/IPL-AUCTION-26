@@ -7,6 +7,7 @@ import { ImportResultsForm } from "@/components/room/import-results-form";
 import { MyTeamPanel } from "@/components/room/my-team-panel";
 import { ReadinessPanel } from "@/components/room/readiness-panel";
 import { RoomInvitePanel } from "@/components/room/room-invite-panel";
+import { RoomAuctionExportButton } from "@/components/room/room-auction-export-button";
 import { StartAuctionButton } from "@/components/room/start-auction-button";
 import { TeamOwnershipPanel } from "@/components/room/team-ownership-panel";
 import { UploadPlayersForm } from "@/components/room/upload-players-form";
@@ -88,6 +89,14 @@ export default async function RoomPage({
           <div className="subtle mono">{snapshot.room.code}</div>
         </div>
         <div className="link-row">
+          {snapshot.currentMember.isAdmin ? (
+            <RoomAuctionExportButton
+              room={snapshot.room}
+              players={snapshot.players}
+              squads={snapshot.squads}
+              teams={snapshot.teams}
+            />
+          ) : null}
           <Link className="button ghost" href="/lobby">
             Lobby
           </Link>

@@ -76,13 +76,18 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
         <label>IPL season</label>
         <input
           className="input"
-          disabled={pending}
+          disabled={pending || mode === "json"}
           onChange={(event) => setSeason(event.target.value)}
-          placeholder="e.g. 2026"
+          placeholder={mode === "json" ? "Taken from JSON file" : "e.g. 2026"}
           style={{ maxWidth: "8rem" }}
           type="text"
-          value={season}
+          value={mode === "json" ? "Auto" : season}
         />
+        {mode === "json" && (
+          <p className="subtle" style={{ fontSize: "0.78rem", marginTop: "0.4rem" }}>
+            Single JSON uploads use the season inside the match file automatically.
+          </p>
+        )}
       </div>
 
       <div className="pill-row" style={{ gap: "0.5rem" }}>
