@@ -468,9 +468,15 @@ export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
 
                     <button
                       className={`button ${isAccepted ? "" : "ghost"}`}
-                      disabled={isProcessing}
+                      disabled={isProcessing || isAccepted}
                       onClick={() => void handleAccept(match.matchId, srcKey)}
-                      style={{ width: "100%", fontSize: "0.82rem", padding: "0.45rem" }}
+                      style={{
+                        width: "100%",
+                        fontSize: "0.82rem",
+                        padding: "0.45rem",
+                        cursor: isAccepted ? "default" : undefined,
+                        opacity: isAccepted ? 0.92 : 1,
+                      }}
                       type="button"
                     >
                       {isAccepted ? "Accepted" : isProcessing ? "Accepting..." : "Accept this source"}
