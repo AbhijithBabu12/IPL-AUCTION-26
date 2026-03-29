@@ -35,16 +35,14 @@ async function get<T>(path: string): Promise<T> {
     message?: string;
     msg?: string;
     reason?: string;
-    info?: string;
+    info?: unknown;
   };
   if (json.status === "failure") {
-    throw new Error(
-      json.message ??
-      json.msg ??
-      json.reason ??
-      json.info ??
-      "CricketData API error",
-    );
+    // info can be an object e.g. { hitsToday: 107, hitsLimit: 100, credits: 0 }
+    const info = json.info != null
+      ? (typeof json.info === "object" ? JSON.stringify(json.info) : String(json.info))
+      : null;
+    throw new Error(json.message ?? json.msg ?? json.reason ?? info ?? "CricketData API error");
   }
   return json.data as T;
 }

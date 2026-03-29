@@ -221,10 +221,12 @@ export async function fetchMatchScorecard(
   };
 }
 
-// ── Fallback: find IPL matches via recent-matches endpoint ────────────────────
-// Used when the series-category search can't find IPL (e.g. early in the season).
+// ── Fallback: find IPL series ID via recent-matches endpoint ─────────────────
+// IPL is not listed in /series/v1/league (or any category) early in the season.
+// But it IS present in /matches/v1/recent with a seriesId we can use to fetch all matches.
 
 interface CricbuzzRecentMatchWrapper {
+  seriesId?: number;
   seriesName?: string;
   matches?: CricbuzzMatch[];
 }
@@ -234,18 +236,17 @@ interface CricbuzzTypeMatch {
   seriesMatches?: Array<{ seriesAdWrapper?: CricbuzzRecentMatchWrapper }>;
 }
 
-async function findIPLMatchesViaRecent(season: string): Promise<CricbuzzMatch[]> {
+async function findIPLSeriesIdViaRecent(season: string): Promise<string | null> {
   const data = await get<{ typeMatches?: CricbuzzTypeMatch[] }>("/matches/v1/recent");
-  const matches: CricbuzzMatch[] = [];
   for (const tm of data?.typeMatches ?? []) {
     for (const sm of tm?.seriesMatches ?? []) {
       const w = sm?.seriesAdWrapper;
-      if (w?.seriesName && isIPLSeries(w.seriesName, season)) {
-        matches.push(...(w.matches ?? []));
+      if (w?.seriesName && isIPLSeries(w.seriesName, season) && w.seriesId != null) {
+        return String(w.seriesId);
       }
     }
   }
-  return matches;
+  return null;
 }
 
 // ── Main entry point ──────────────────────────────────────────────────────────
@@ -254,7 +255,7 @@ export async function fetchIPLMatchesFromRapidAPI(
   season: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<NormalizedMatch[]> {
-  // Try series-based lookup first, fall back to recent-matches if not found
+  // Try series-based lookup first, fall back to recent-matches feed for the series ID
   let completed: CricbuzzMatch[] = [];
   try {
     const seriesId = await findIPLSeriesId(season);
@@ -263,11 +264,15 @@ export async function fetchIPLMatchesFromRapidAPI(
       (m) => m.matchInfo?.state?.toLowerCase() === "complete",
     );
   } catch {
-    // Series not found in category listings — try recent matches feed
-    const recent = await findIPLMatchesViaRecent(season);
-    completed = recent.filter(
-      (m) => m.matchInfo?.state?.toLowerCase() === "complete",
-    );
+    // IPL not in category endpoints — extract its seriesId from the recent feed
+    // then fetch the full series match list (not just the 1 match in the feed)
+    const recentSeriesId = await findIPLSeriesIdViaRecent(season);
+    if (recentSeriesId) {
+      const allMatches = await listSeriesMatches(recentSeriesId);
+      completed = allMatches.filter(
+        (m) => m.matchInfo?.state?.toLowerCase() === "complete",
+      );
+    }
   }
 
   const results: NormalizedMatch[] = [];

@@ -459,3 +459,61 @@ CREATE INDEX IF NOT EXISTS idx_players_cricsheet_uuid
 | `supabase/match-results.sql` | Run once (previous session) | Existing |
 | `supabase/add-cricsheet-uuid.sql` | Run once (this session) | **NEW â€” run now** |
 
+---
+
+# Session Changelog (2026-03-29)
+
+## What Was Changed
+
+### 13. Dot Ball Milestone Scoring — Full Fix Across All Data Paths
+
+**Problem:** The old rule was a flat `+1 per dot ball`, which violated RULES.MD. Additionally, `dot_balls` was never populated from any API source — `ScorecardBowlingRow` had no `dot_balls` field — so every player always had `0` dot ball points.
+
+**New rule (per RULES.MD):**
+
+| Dot Ball Count (per match) | Points |
+|----------------------------|--------|
+| 3 dot balls | +1 |
+| 6 dot balls | +2 (total, capped) |
+
+Maiden over = **+12** (maiden) **+ +2** (6-dot milestone) = **+14 total**.
+
+**Fix spans 9 files:**
+
+| File | Change |
+|------|--------|
+| `RULES.MD` | Replaced `Dot Ball \| +1` with two rows: `3 Dot Balls \| +1` and `6 Dot Balls \| +2` |
+| `lib/domain/scoring.ts` | Added `dot_ball_pts?: number` to `PlayerStats`; added `dotBallPts()` helper; backward-compatible scoring line |
+| `lib/server/webscrape/parser.ts` | Added `dot_balls` to `ScorecardBowlingRow`; added `dot_ball_pts` to `PlayerMatchStats`; recomputes per-match milestone in `mergeInningStats` |
+| `lib/server/webscrape/rapidapi.ts` | Added `dots?: number` to `CricbuzzBowler`; passes `dot_balls` through |
+| `lib/server/webscrape/atd.ts` | Added `dots?: number` to `AtdBowler`; passes `dot_balls` through |
+| `lib/server/webscrape/cricketdata.ts` | Added `dots` to `CricketDataBowler`; passes `dot_balls` through |
+| `app/api/rooms/[code]/webscrape-accept/route.ts` | Added `dotBallPts()` helper; accumulates `dot_ball_pts` per season |
+| `app/api/rooms/[code]/cricsheet-sync/route.ts` | Same accumulation pattern as webscrape-accept |
+| `lib/server/cricsheet.ts` | Tracks dots per delivery in `matchBowl` Map; computes per-match milestone after economy loop |
+
+**Key design rule:** `dot_ball_pts` is computed per-match then accumulated — never sum raw dots across matches first (would trigger milestone wrongly across match boundaries).
+
+**Verified output:**
+```
+dotBallPts(2)  → 0
+dotBallPts(3)  → 1
+dotBallPts(6)  → 2
+dotBallPts(13) → 2  (capped)
+Maiden over    → +12 + +2 = +14
+```
+
+TypeScript compile: clean.
+
+> **No DB migration required.** `dot_ball_pts` stores inside existing `players.stats` and `match_results.player_stats` jsonb columns.
+
+---
+
+## Pending / Known Issues
+
+| Issue | Detail |
+|-------|---------|
+| Name mismatch — Phil Salt | API returns `”Phil Salt”`, DB has `”Philip Salt”`. Rs.19.25Cr player — stats won't attribute on live fetch. |
+| Name mismatch — Nitish Reddy | API returns `”Nitish K. Reddy”`, DB has `”Nitish Kumar Reddy”` |
+| Economy threshold | Exactly 2.0 overs (`balls === 12`) triggers penalty in SFL but D11 does not penalise it — decision pending |
+

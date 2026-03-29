@@ -237,6 +237,7 @@ export async function fetchMatchScorecard(
 // ── Fallback: recent matches ──────────────────────────────────────────────────
 
 interface AtdRecentWrapper {
+  seriesId?: number;
   seriesName?: string;
   matches?: AtdMatch[];
 }
@@ -246,18 +247,17 @@ interface AtdTypeMatch {
   seriesMatches?: Array<{ seriesAdWrapper?: AtdRecentWrapper }>;
 }
 
-async function findIPLMatchesViaRecent(season: string): Promise<AtdMatch[]> {
+async function findIPLSeriesIdViaRecent(season: string): Promise<string | null> {
   const data = await get<{ typeMatches?: AtdTypeMatch[] }>("/matches/v1/recent");
-  const matches: AtdMatch[] = [];
   for (const tm of data?.typeMatches ?? []) {
     for (const sm of tm?.seriesMatches ?? []) {
       const w = sm?.seriesAdWrapper;
-      if (w?.seriesName && isIPLSeries(w.seriesName, season)) {
-        matches.push(...(w.matches ?? []));
+      if (w?.seriesName && isIPLSeries(w.seriesName, season) && w.seriesId != null) {
+        return String(w.seriesId);
       }
     }
   }
-  return matches;
+  return null;
 }
 
 // ── Main entry point ──────────────────────────────────────────────────────────
@@ -275,11 +275,14 @@ export async function fetchIPLMatchesFromATD(
       (m) => m.matchInfo?.state?.toLowerCase() === "complete",
     );
   } catch {
-    // Series lookup failed — fall back to recent matches feed
-    const recent = await findIPLMatchesViaRecent(season);
-    completed = recent.filter(
-      (m) => m.matchInfo?.state?.toLowerCase() === "complete",
-    );
+    // IPL not in category endpoints — extract its seriesId from the recent feed
+    const recentSeriesId = await findIPLSeriesIdViaRecent(season);
+    if (recentSeriesId) {
+      const allMatches = await listSeriesMatches(recentSeriesId);
+      completed = allMatches.filter(
+        (m) => m.matchInfo?.state?.toLowerCase() === "complete",
+      );
+    }
   }
 
   const results: NormalizedMatch[] = [];
