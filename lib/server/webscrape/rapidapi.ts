@@ -1,5 +1,5 @@
 /**
- * RapidAPI — Cricbuzz Cricket Score provider — SECONDARY source
+ * RapidAPI - Cricbuzz Cricket Score provider - SECONDARY source
  * Host: cricbuzz-cricket.p.rapidapi.com
  * Sign up at https://rapidapi.com/cricketapilive/api/cricbuzz-cricket
  */
@@ -34,8 +34,6 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// ── Find IPL series ───────────────────────────────────────────────────────────
-
 interface CricbuzzSeriesItem {
   id: string;
   name: string;
@@ -46,41 +44,44 @@ interface CricbuzzSeriesCategory {
 }
 
 function isIPLSeries(name: string, season: string): boolean {
-  const n = name.toLowerCase();
-  const hasIpl = n.includes("indian premier league") || n.includes(" ipl ") ||
-    n.startsWith("ipl ") || n.endsWith(" ipl") || n === "ipl";
+  const normalized = name.toLowerCase();
+  const hasIpl = normalized.includes("indian premier league") ||
+    normalized.includes(" ipl ") ||
+    normalized.startsWith("ipl ") ||
+    normalized.endsWith(" ipl") ||
+    normalized === "ipl";
+
   return hasIpl && name.includes(season);
 }
 
 function extractSeries(data: CricbuzzSeriesCategory): CricbuzzSeriesItem[] {
   const list: CricbuzzSeriesItem[] = [];
   for (const block of data?.seriesMapProto ?? []) {
-    for (const s of block.series ?? []) {
-      list.push(s);
+    for (const series of block.series ?? []) {
+      list.push(series);
     }
   }
   return list;
 }
 
 export async function findIPLSeriesId(season: string): Promise<string> {
-  // IPL is a T20 league — try /league first, then domestic as fallback
   const categories = ["league", "domestic", "international"];
   const errors: string[] = [];
 
-  for (const cat of categories) {
+  for (const category of categories) {
     try {
-      const data = await get<CricbuzzSeriesCategory>(`/series/v1/${cat}`);
-      const found = extractSeries(data).find((s) => isIPLSeries(s.name ?? "", season));
+      const data = await get<CricbuzzSeriesCategory>(`/series/v1/${category}`);
+      const found = extractSeries(data).find((series) => isIPLSeries(series.name ?? "", season));
       if (found) return String(found.id);
-    } catch (e) {
-      errors.push(`${cat}: ${String(e)}`);
+    } catch (error) {
+      errors.push(`${category}: ${String(error)}`);
     }
   }
 
-  throw new Error(`IPL ${season} series not found on RapidAPI/Cricbuzz (tried: ${categories.join(", ")})`);
+  throw new Error(
+    `IPL ${season} series not found on RapidAPI/Cricbuzz (tried: ${categories.join(", ")}). ${errors.join(" | ")}`,
+  );
 }
-
-// ── List matches ──────────────────────────────────────────────────────────────
 
 interface CricbuzzMatch {
   matchInfo?: {
@@ -88,8 +89,25 @@ interface CricbuzzMatch {
     startDate?: string;
     team1?: { teamName?: string };
     team2?: { teamName?: string };
-    state?: string; // "Complete" when done
+    state?: string;
+    stateTitle?: string;
+    status?: string;
   };
+}
+
+function isCompletedMatch(match: CricbuzzMatch): boolean {
+  const state = match.matchInfo?.state?.trim().toLowerCase();
+  const stateTitle = match.matchInfo?.stateTitle?.trim().toLowerCase();
+  const status = match.matchInfo?.status?.trim().toLowerCase() ?? "";
+
+  if (state === "complete" || state === "completed") return true;
+  if (stateTitle === "complete" || stateTitle === "completed") return true;
+
+  return status.includes("won by") ||
+    status.includes("match tied") ||
+    status.includes("match drawn") ||
+    status.includes("no result") ||
+    status.startsWith("result");
 }
 
 export async function listSeriesMatches(seriesId: string): Promise<CricbuzzMatch[]> {
@@ -103,36 +121,38 @@ export async function listSeriesMatches(seriesId: string): Promise<CricbuzzMatch
   for (const block of data?.matchDetails ?? []) {
     const map = block?.matchDetailsMap;
     if (!map) continue;
-    // matchDetailsMap may be keyed by match label or have a direct "match" array
+
     if (Array.isArray((map as { match?: CricbuzzMatch[] }).match)) {
       matches.push(...((map as { match: CricbuzzMatch[] }).match));
-    } else {
-      // Iterate all values — each may contain a match array
-      for (const val of Object.values(map)) {
-        if (val && Array.isArray((val as { match?: CricbuzzMatch[] }).match)) {
-          matches.push(...((val as { match: CricbuzzMatch[] }).match));
-        }
+      continue;
+    }
+
+    for (const value of Object.values(map)) {
+      if (value && Array.isArray((value as { match?: CricbuzzMatch[] }).match)) {
+        matches.push(...((value as { match: CricbuzzMatch[] }).match));
       }
     }
   }
+
   return matches;
 }
 
-// ── Fetch and parse scorecard ─────────────────────────────────────────────────
-
 interface CricbuzzBatter {
   batName?: unknown;
+  name?: string;
   runs?: number;
-  balls?: number;
+  balls?: number | string;
   fours?: number;
   sixes?: number;
   strikeRate?: number;
   outDesc?: string;
+  outdec?: string;
 }
 
 interface CricbuzzBowler {
   bowlName?: unknown;
-  overs?: number;
+  name?: string;
+  overs?: number | string;
   maidens?: number;
   runs?: number;
   wickets?: number;
@@ -142,12 +162,24 @@ interface CricbuzzBowler {
 
 interface CricbuzzInning {
   inningsId?: number;
+  inningsid?: number;
   batTeamDetails?: {
     batsmenData?: Record<string, CricbuzzBatter>;
   };
   bowlTeamDetails?: {
     bowlersData?: Record<string, CricbuzzBowler>;
   };
+  batsman?: CricbuzzBatter[];
+  bowler?: CricbuzzBowler[];
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 export async function fetchMatchScorecard(
@@ -155,50 +187,50 @@ export async function fetchMatchScorecard(
   season: string,
 ): Promise<NormalizedMatch> {
   const matchId = String(match.matchInfo?.matchId ?? "");
-  const data = await get<{ scoreCard?: CricbuzzInning[] }>(`/mcenter/v1/${matchId}/scard`);
-  const innings = data?.scoreCard ?? [];
+  const data = await get<{ scoreCard?: CricbuzzInning[]; scorecard?: CricbuzzInning[] }>(
+    `/mcenter/v1/${matchId}/scard`,
+  );
+  const innings = data?.scoreCard ?? data?.scorecard ?? [];
 
   const inningStats = innings.map((inning) => {
-    const batting: ScorecardBattingRow[] = Object.values(
-      inning.batTeamDetails?.batsmenData ?? {},
-    )
-      .map((b) => ({
-        name: extractDisplayName(b.batName),
-        runs: b.runs ?? 0,
-        balls: b.balls ?? 0,
-        fours: b.fours ?? 0,
-        sixes: b.sixes ?? 0,
-        outDesc: String(b.outDesc ?? "").trim(),
+    const battingSource = inning.batsman ?? Object.values(inning.batTeamDetails?.batsmenData ?? {});
+    const batting: ScorecardBattingRow[] = battingSource
+      .map((batter) => ({
+        name: extractDisplayName(batter.batName ?? batter.name),
+        runs: toNumber(batter.runs),
+        balls: toNumber(batter.balls),
+        fours: toNumber(batter.fours),
+        sixes: toNumber(batter.sixes),
+        outDesc: String(batter.outDesc ?? batter.outdec ?? "").trim(),
       }))
-      .filter((b) => b.name)
-      .map((b) => ({
-        name: b.name,
-        runs: b.runs,
-        balls: b.balls,
-        fours: b.fours,
-        sixes: b.sixes,
-        outDesc: b.outDesc,
+      .filter((batter) => batter.name)
+      .map((batter) => ({
+        name: batter.name,
+        runs: batter.runs,
+        balls: batter.balls,
+        fours: batter.fours,
+        sixes: batter.sixes,
+        outDesc: batter.outDesc,
       }));
 
-    const bowling: ScorecardBowlingRow[] = Object.values(
-      inning.bowlTeamDetails?.bowlersData ?? {},
-    )
-      .map((b) => ({
-        name: extractDisplayName(b.bowlName),
-        overs: b.overs ?? 0,
-        maidens: b.maidens ?? 0,
-        runs: b.runs ?? 0,
-        wickets: b.wickets ?? 0,
-        dot_balls: b.dots ?? 0,
+    const bowlingSource = inning.bowler ?? Object.values(inning.bowlTeamDetails?.bowlersData ?? {});
+    const bowling: ScorecardBowlingRow[] = bowlingSource
+      .map((bowler) => ({
+        name: extractDisplayName(bowler.bowlName ?? bowler.name),
+        overs: bowler.overs ?? 0,
+        maidens: toNumber(bowler.maidens),
+        runs: toNumber(bowler.runs),
+        wickets: toNumber(bowler.wickets),
+        dot_balls: toNumber(bowler.dots),
       }))
-      .filter((b) => b.name)
-      .map((b) => ({
-        name: b.name,
-        overs: b.overs,
-        maidens: b.maidens,
-        runs: b.runs,
-        wickets: b.wickets,
-        dot_balls: b.dot_balls,
+      .filter((bowler) => bowler.name)
+      .map((bowler) => ({
+        name: bowler.name,
+        overs: bowler.overs,
+        maidens: bowler.maidens,
+        runs: bowler.runs,
+        wickets: bowler.wickets,
+        dot_balls: bowler.dot_balls,
       }));
 
     return processInning(batting, bowling);
@@ -221,10 +253,6 @@ export async function fetchMatchScorecard(
   };
 }
 
-// ── Fallback: find IPL series ID via recent-matches endpoint ─────────────────
-// IPL is not listed in /series/v1/league (or any category) early in the season.
-// But it IS present in /matches/v1/recent with a seriesId we can use to fetch all matches.
-
 interface CricbuzzRecentMatchWrapper {
   seriesId?: number;
   seriesName?: string;
@@ -238,60 +266,63 @@ interface CricbuzzTypeMatch {
 
 async function findIPLSeriesIdViaRecent(season: string): Promise<string | null> {
   const data = await get<{ typeMatches?: CricbuzzTypeMatch[] }>("/matches/v1/recent");
-  for (const tm of data?.typeMatches ?? []) {
-    for (const sm of tm?.seriesMatches ?? []) {
-      const w = sm?.seriesAdWrapper;
-      if (w?.seriesName && isIPLSeries(w.seriesName, season) && w.seriesId != null) {
-        return String(w.seriesId);
+  for (const typeMatch of data?.typeMatches ?? []) {
+    for (const seriesMatch of typeMatch?.seriesMatches ?? []) {
+      const wrapper = seriesMatch?.seriesAdWrapper;
+      if (wrapper?.seriesName && isIPLSeries(wrapper.seriesName, season) && wrapper.seriesId != null) {
+        return String(wrapper.seriesId);
       }
     }
   }
   return null;
 }
 
-// ── Main entry point ──────────────────────────────────────────────────────────
-
 export async function fetchIPLMatchesFromRapidAPI(
   season: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<NormalizedMatch[]> {
-  // Try series-based lookup first, fall back to recent-matches feed for the series ID
   let completed: CricbuzzMatch[] = [];
+  let lookupError: unknown = null;
+
   try {
     const seriesId = await findIPLSeriesId(season);
     const allMatches = await listSeriesMatches(seriesId);
-    completed = allMatches.filter(
-      (m) => m.matchInfo?.state?.toLowerCase() === "complete",
-    );
-  } catch {
-    // IPL not in category endpoints — extract its seriesId from the recent feed
-    // then fetch the full series match list (not just the 1 match in the feed)
+    completed = allMatches.filter(isCompletedMatch);
+  } catch (error) {
+    lookupError = error;
+
     const recentSeriesId = await findIPLSeriesIdViaRecent(season);
     if (recentSeriesId) {
       const allMatches = await listSeriesMatches(recentSeriesId);
-      completed = allMatches.filter(
-        (m) => m.matchInfo?.state?.toLowerCase() === "complete",
-      );
+      completed = allMatches.filter(isCompletedMatch);
     }
+  }
+
+  if (completed.length === 0) {
+    if (lookupError) {
+      throw lookupError;
+    }
+    throw new Error(`RapidAPI / Cricbuzz found IPL ${season}, but no completed matches are available yet.`);
   }
 
   const results: NormalizedMatch[] = [];
   let lastError: unknown = null;
-  for (let i = 0; i < completed.length; i++) {
-    const match = completed[i]!;
+  for (let index = 0; index < completed.length; index++) {
+    const match = completed[index]!;
     try {
-      const nm = await fetchMatchScorecard(match, season);
-      results.push(nm);
+      const normalizedMatch = await fetchMatchScorecard(match, season);
+      results.push(normalizedMatch);
     } catch (error) {
       lastError = error;
     }
-    onProgress?.(i + 1, completed.length);
+    onProgress?.(index + 1, completed.length);
   }
 
-  if (results.length === 0 && completed.length > 0) {
+  if (results.length === 0) {
     throw new Error(
       `RapidAPI / Cricbuzz scorecards could not be parsed.${lastError instanceof Error ? ` ${lastError.message}` : ""}`,
     );
   }
+
   return results;
 }
