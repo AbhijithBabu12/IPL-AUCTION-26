@@ -21,6 +21,7 @@ export interface PlayerStats {
   balls_bowled?: number;
   runs_conceded?: number;
   dot_balls?: number;
+  dot_ball_pts?: number;   // +1 at 3 dots, +2 at 6 dots (pre-computed per match)
   maiden_overs?: number;
   lbw_bowled_wickets?: number;
 
@@ -48,6 +49,13 @@ export interface PlayerStats {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function dotBallPts(dots: number): number {
+  let pts = 0;
+  if (dots >= 3) pts += 1;
+  if (dots >= 6) pts += 1;
+  return pts;
+}
 
 function n(value: unknown): number {
   if (typeof value === "number" && isFinite(value)) return value;
@@ -79,7 +87,8 @@ export function scorePlayer(player: Player): number {
   // ── Bowling ────────────────────────────────────────────────────────────────
   pts += n(s.wickets) * 30;           // +30 per wicket (excl. run outs)
   pts += n(s.lbw_bowled_wickets) * 8; // LBW / bowled bonus +8 each
-  pts += n(s.dot_balls);              // +1 per dot ball
+  // dot ball milestones: +1 at 3, +2 at 6 (pre-computed per match; fallback to live calc)
+  pts += s.dot_ball_pts !== undefined ? n(s.dot_ball_pts) : dotBallPts(n(s.dot_balls));
   pts += n(s.maiden_overs) * 12;      // +12 per maiden
   pts += n(s.milestone_wkts_pts);     // 3W/4W/5W milestones (per-match, cumulative)
   pts += n(s.economy_pts);            // economy rate bonus (per-match)

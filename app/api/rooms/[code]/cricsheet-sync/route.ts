@@ -25,6 +25,13 @@ interface MappingEntry {
   full_name: string;
 }
 
+function dotBallPts(dots: number): number {
+  let pts = 0;
+  if (dots >= 3) pts += 1;
+  if (dots >= 6) pts += 1;
+  return pts;
+}
+
 function normalizeName(name: string): string {
   return name.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
 }
@@ -117,6 +124,7 @@ function aggregateToPlayerStats(
           balls_bowled: 0,
           runs_conceded: 0,
           dot_balls: 0,
+          dot_ball_pts: 0,
           maiden_overs: 0,
           lbw_bowled_wickets: 0,
           catches: 0,
@@ -153,6 +161,7 @@ function aggregateToPlayerStats(
       target.catches = (target.catches ?? 0) + (stats.catches ?? 0);
       target.stumpings = (target.stumpings ?? 0) + (stats.stumpings ?? 0);
       target.run_outs_direct = (target.run_outs_direct ?? 0) + (stats.run_outs ?? 0);
+      target.dot_ball_pts = (target.dot_ball_pts ?? 0) + (stats.dot_ball_pts ?? dotBallPts(stats.dot_balls ?? 0));
       target.milestone_runs_pts =
         (target.milestone_runs_pts ?? 0) + (stats.milestone_runs_pts ?? 0);
       target.milestone_wkts_pts =
@@ -185,6 +194,7 @@ function buildSeasonStatsPayload(
     balls_bowled: 0,
     runs_conceded: 0,
     dot_balls: 0,
+    dot_ball_pts: 0,
     maiden_overs: 0,
     lbw_bowled_wickets: 0,
     catches: 0,
@@ -215,6 +225,7 @@ function buildSeasonStatsPayload(
     lbw_bowled_wickets: source.lbw_bowled_wickets ?? 0,
     catches: source.catches ?? 0,
     stumpings: source.stumpings ?? 0,
+    dot_ball_pts: source.dot_ball_pts ?? 0,
     run_outs_direct: source.run_outs_direct ?? 0,
     run_outs_indirect: source.run_outs_indirect ?? 0,
     milestone_runs_pts: source.milestone_runs_pts ?? 0,

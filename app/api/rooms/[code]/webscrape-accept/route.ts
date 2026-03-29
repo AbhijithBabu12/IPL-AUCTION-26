@@ -33,6 +33,13 @@ export const dynamic = "force-dynamic";
 
 // ── Name normalisation (same logic as cricsheet-sync) ─────────────────────────
 
+function dotBallPts(dots: number): number {
+  let pts = 0;
+  if (dots >= 3) pts += 1;
+  if (dots >= 6) pts += 1;
+  return pts;
+}
+
 function normaliseName(name: string): string {
   return name
     .toLowerCase()
@@ -88,7 +95,7 @@ function aggregateToPlayerStats(
         season[playerName] = {
           runs: 0, balls_faced: 0, fours: 0, sixes: 0, ducks: 0,
           wickets: 0, balls_bowled: 0, runs_conceded: 0,
-          dot_balls: 0, maiden_overs: 0, lbw_bowled_wickets: 0,
+          dot_balls: 0, dot_ball_pts: 0, maiden_overs: 0, lbw_bowled_wickets: 0,
           catches: 0, stumpings: 0, run_outs_direct: 0, run_outs_indirect: 0,
           milestone_runs_pts: 0, milestone_wkts_pts: 0,
           sr_pts: 0, economy_pts: 0, catch_bonus_pts: 0,
@@ -111,6 +118,8 @@ function aggregateToPlayerStats(
       s.balls_bowled = (s.balls_bowled ?? 0) + (m.balls_bowled ?? 0);
       s.runs_conceded = (s.runs_conceded ?? 0) + (m.runs_conceded ?? 0);
       s.dot_balls = (s.dot_balls ?? 0) + (m.dot_balls ?? 0);
+      // dot_ball_pts is pre-computed per match; fall back to live calc for old records
+      s.dot_ball_pts = (s.dot_ball_pts ?? 0) + (m.dot_ball_pts ?? dotBallPts(m.dot_balls ?? 0));
       s.maiden_overs = (s.maiden_overs ?? 0) + (m.maiden_overs ?? 0);
       s.lbw_bowled_wickets = (s.lbw_bowled_wickets ?? 0) + (m.lbw_bowled_wickets ?? 0);
 
@@ -153,6 +162,7 @@ function buildSeasonStatsPayload(
     balls_bowled: 0,
     runs_conceded: 0,
     dot_balls: 0,
+    dot_ball_pts: 0,
     maiden_overs: 0,
     lbw_bowled_wickets: 0,
     catches: 0,
@@ -179,6 +189,7 @@ function buildSeasonStatsPayload(
     wickets: source.wickets ?? 0,
     balls_bowled: source.balls_bowled ?? 0,
     runs_conceded: source.runs_conceded ?? 0,
+    dot_ball_pts: source.dot_ball_pts ?? 0,
     maiden_overs: source.maiden_overs ?? 0,
     lbw_bowled_wickets: source.lbw_bowled_wickets ?? 0,
     catches: source.catches ?? 0,

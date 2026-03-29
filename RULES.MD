@@ -19,7 +19,8 @@
 
 | Event | Points |
 |------|--------|
-| Dot Ball | +1 |
+| 3 Dot Balls | +1 |
+| 6 Dot Balls | +2 |
 | Wicket (excluding Run Out) | +30 |
 | Bonus (LBW/Bowled) | +8 |
 | 3 Wicket Bonus | +4 |

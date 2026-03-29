@@ -137,6 +137,7 @@ interface CricbuzzBowler {
   runs?: number;
   wickets?: number;
   economy?: number;
+  dots?: number;
 }
 
 interface CricbuzzInning {
@@ -188,6 +189,7 @@ export async function fetchMatchScorecard(
         maidens: b.maidens ?? 0,
         runs: b.runs ?? 0,
         wickets: b.wickets ?? 0,
+        dot_balls: b.dots ?? 0,
       }))
       .filter((b) => b.name)
       .map((b) => ({
@@ -196,6 +198,7 @@ export async function fetchMatchScorecard(
         maidens: b.maidens,
         runs: b.runs,
         wickets: b.wickets,
+        dot_balls: b.dot_balls,
       }));
 
     return processInning(batting, bowling);

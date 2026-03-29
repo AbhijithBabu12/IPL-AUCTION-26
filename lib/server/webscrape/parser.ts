@@ -39,6 +39,7 @@ export interface PlayerMatchStats {
   milestone_wkts_pts: number;
   economy_pts: number;
   catch_bonus_pts: number;
+  dot_ball_pts: number;   // +1 at 3 dots, +2 at 6 (pre-computed per match)
 }
 
 export interface NormalizedMatch {
@@ -81,6 +82,13 @@ export function oversToBalls(overs: string | number): number {
   const o = typeof overs === "number" ? overs : parseFloat(String(overs));
   if (!isFinite(o)) return 0;
   return Math.floor(o) * 6 + Math.round((o % 1) * 10);
+}
+
+function dotBallPts(dots: number): number {
+  let pts = 0;
+  if (dots >= 3) pts += 1;
+  if (dots >= 6) pts += 1;
+  return pts;
 }
 
 function battingBonuses(runs: number, balls: number, dismissed: boolean) {
@@ -194,6 +202,7 @@ export interface ScorecardBowlingRow {
   maidens: number;
   runs: number;
   wickets: number;
+  dot_balls?: number;
 }
 
 export interface ProcessedInning {
@@ -207,7 +216,7 @@ function emptyPlayerStats(): PlayerMatchStats {
     catches: 0, stumpings: 0, run_outs: 0,
     appeared: true,
     milestone_runs_pts: 0, sr_pts: 0, duck_penalty: 0,
-    milestone_wkts_pts: 0, economy_pts: 0, catch_bonus_pts: 0,
+    milestone_wkts_pts: 0, economy_pts: 0, catch_bonus_pts: 0, dot_ball_pts: 0,
   };
 }
 
@@ -288,6 +297,7 @@ export function processInning(
     s.runs_conceded = row.runs;
     s.wickets = row.wickets;
     s.maiden_overs = row.maidens;
+    s.dot_balls = row.dot_balls ?? 0;
     s.lbw_bowled_wickets = lbwBowledByBowler[row.name] ?? 0;
 
     const { milestonePts, econPts } = bowlingBonuses(row.wickets, balls, row.runs);
@@ -330,6 +340,11 @@ export function mergeInningStats(
     }
   }
 
+  // Recompute dot_ball_pts from per-match total (milestone must be per-match, not per-inning)
+  for (const t of Object.values(merged)) {
+    t.dot_ball_pts = dotBallPts(t.dot_balls);
+  }
+
   return merged;
 }
 
@@ -351,7 +366,7 @@ export function computeMatchPoints(
   // Bowling
   pts += stats.wickets * 30;
   pts += stats.lbw_bowled_wickets * 8;
-  pts += stats.dot_balls;
+  pts += stats.dot_ball_pts; // milestone: +1 at 3 dots, +2 at 6
   pts += stats.maiden_overs * 12;
   pts += stats.milestone_wkts_pts;
   pts += stats.economy_pts;

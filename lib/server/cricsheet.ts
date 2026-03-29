@@ -86,6 +86,7 @@ function empty(): CricsheetAccumulator {
     sr_pts: 0,
     economy_pts: 0,
     catch_bonus_pts: 0,
+    dot_ball_pts: 0,
     lineup_appearances: 0,
     substitute_appearances: 0,
     matches_played: 0,
@@ -145,7 +146,7 @@ export function processMatch(
 
   const appearedInMatch = new Set<string>();
   const matchBat = new Map<string, { runs: number; balls: number; dismissed: boolean }>();
-  const matchBowl = new Map<string, { balls: number; runs: number; wickets: number }>();
+  const matchBowl = new Map<string, { balls: number; runs: number; wickets: number; dots: number }>();
   const matchCatches = new Map<string, number>();
 
   for (const inning of innings) {
@@ -184,9 +185,10 @@ export function processMatch(
         }
         overTotalRuns += delivery.runs.total;
 
-        const bowlMatch = matchBowl.get(bowler) ?? { balls: 0, runs: 0, wickets: 0 };
+        const bowlMatch = matchBowl.get(bowler) ?? { balls: 0, runs: 0, wickets: 0, dots: 0 };
         bowlMatch.runs += delivery.runs.total;
         if (!isWide) bowlMatch.balls += 1;
+        if (!isWide && delivery.runs.total === 0) bowlMatch.dots += 1;
         matchBowl.set(bowler, bowlMatch);
 
         for (const wicket of delivery.wickets ?? []) {
@@ -275,6 +277,10 @@ export function processMatch(
       else if (economy > 11 && economy <= 12) acc.economy_pts -= 4;
       else if (economy > 12) acc.economy_pts -= 6;
     }
+
+    // dot ball milestones: +1 at 3, +2 at 6 (per match)
+    if (bowlMatch.dots >= 3) acc.dot_ball_pts += 1;
+    if (bowlMatch.dots >= 6) acc.dot_ball_pts += 1;
   }
 
   for (const [playerName, catches] of matchCatches) {
@@ -328,6 +334,7 @@ function accumulatorToMatchStats(acc: CricsheetAccumulator): PlayerMatchStats {
     milestone_wkts_pts: acc.milestone_wkts_pts,
     economy_pts: acc.economy_pts,
     catch_bonus_pts: acc.catch_bonus_pts,
+    dot_ball_pts: acc.dot_ball_pts,
   };
 }
 

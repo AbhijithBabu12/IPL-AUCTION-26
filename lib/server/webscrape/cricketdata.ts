@@ -100,6 +100,7 @@ interface CricketDataBowler {
   r: string | number;
   w: string | number;
   eco?: string;
+  dots?: string | number;
 }
 
 interface CricketDataInning {
@@ -147,6 +148,7 @@ export async function fetchMatchScorecard(
       maidens: n(bw.m),
       runs: n(bw.r),
       wickets: n(bw.w),
+      dot_balls: n(bw.dots),
     })).filter((row) => row.name);
 
     return processInning(batting, bowling);
