@@ -20,6 +20,7 @@ export interface PlayerMatchStats {
   // Bowling
   balls_bowled: number;
   runs_conceded: number;
+  dot_balls: number;
   wickets: number;
   maiden_overs: number;
   lbw_bowled_wickets: number; // derived from batting outDesc
@@ -49,6 +50,28 @@ export interface NormalizedMatch {
   source: "cricketdata" | "rapidapi" | "cricapi" | "atd";
   sourceLabel: string;
   playerStats: Record<string, PlayerMatchStats>; // cricketapi player name → stats
+}
+export function extractDisplayName(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+
+  const record = value as Record<string, unknown>;
+  const candidates = [
+    record.name,
+    record.fullName,
+    record.playerName,
+    record.batsmanName,
+    record.bowlerName,
+    record.nickName,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return "";
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -180,7 +203,7 @@ export interface ProcessedInning {
 function emptyPlayerStats(): PlayerMatchStats {
   return {
     runs: 0, balls_faced: 0, fours: 0, sixes: 0, dismissed: false,
-    balls_bowled: 0, runs_conceded: 0, wickets: 0, maiden_overs: 0, lbw_bowled_wickets: 0,
+    balls_bowled: 0, runs_conceded: 0, dot_balls: 0, wickets: 0, maiden_overs: 0, lbw_bowled_wickets: 0,
     catches: 0, stumpings: 0, run_outs: 0,
     appeared: true,
     milestone_runs_pts: 0, sr_pts: 0, duck_penalty: 0,
@@ -291,6 +314,7 @@ export function mergeInningStats(
       if (s.dismissed) t.dismissed = true;
       t.balls_bowled += s.balls_bowled;
       t.runs_conceded += s.runs_conceded;
+      t.dot_balls += s.dot_balls;
       t.wickets += s.wickets;
       t.maiden_overs += s.maiden_overs;
       t.lbw_bowled_wickets += s.lbw_bowled_wickets;
@@ -327,6 +351,7 @@ export function computeMatchPoints(
   // Bowling
   pts += stats.wickets * 30;
   pts += stats.lbw_bowled_wickets * 8;
+  pts += stats.dot_balls;
   pts += stats.maiden_overs * 12;
   pts += stats.milestone_wkts_pts;
   pts += stats.economy_pts;

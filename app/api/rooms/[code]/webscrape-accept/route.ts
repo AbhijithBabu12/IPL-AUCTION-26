@@ -70,6 +70,7 @@ function matchesShortName(statsNormKey: string, dbNormKey: string): boolean {
 //
 // Mapping notes:
 //  dismissed + runs===0  →  ducks++
+//  dot_balls             →  dot_balls
 //  run_outs              →  run_outs_indirect (API scorecards don't distinguish)
 //  appeared              →  lineup_appearances++
 //  All *_pts fields are summed directly (they are already per-match correct)
@@ -109,6 +110,7 @@ function aggregateToPlayerStats(
       s.wickets = (s.wickets ?? 0) + (m.wickets ?? 0);
       s.balls_bowled = (s.balls_bowled ?? 0) + (m.balls_bowled ?? 0);
       s.runs_conceded = (s.runs_conceded ?? 0) + (m.runs_conceded ?? 0);
+      s.dot_balls = (s.dot_balls ?? 0) + (m.dot_balls ?? 0);
       s.maiden_overs = (s.maiden_overs ?? 0) + (m.maiden_overs ?? 0);
       s.lbw_bowled_wickets = (s.lbw_bowled_wickets ?? 0) + (m.lbw_bowled_wickets ?? 0);
 
