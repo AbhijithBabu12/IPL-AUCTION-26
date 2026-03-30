@@ -12,6 +12,7 @@ type PdfTableRow = Record<string, string | number>;
 type PdfTableSection = {
   title: string;
   subtitle?: string;
+  startOnNewPage?: boolean;
   columns: PdfTableColumn[];
   rows: PdfTableRow[];
 };
@@ -190,22 +191,32 @@ export function downloadTablePdf(filename: string, documentTitle: string, sectio
   let current: string[] = [];
   let y = pageHeight - margin;
 
+  const beginPage = () => {
+    current.push(`${bg} rg 0 0 ${pageWidth} ${pageHeight} re f`);
+    let titleY = pageHeight - margin - 8;
+    for (const line of titleLines) {
+      current.push("BT");
+      current.push(`/F2 20 Tf ${text} rg ${margin} ${titleY} Td (${escapePdfText(line)}) Tj ET`);
+      titleY -= 24;
+    }
+    y = titleY - 12;
+  };
+
+  const finishPage = () => {
+    if (current.length > 0) {
+      pages.push(current);
+      current = [];
+    }
+    y = pageHeight - margin;
+  };
+
   const ensurePage = (neededHeight: number) => {
     if (current.length === 0) {
-      current.push(`${bg} rg 0 0 ${pageWidth} ${pageHeight} re f`);
-      let titleY = pageHeight - margin - 8;
-      for (const line of titleLines) {
-        current.push("BT");
-        current.push(`/F2 20 Tf ${text} rg ${margin} ${titleY} Td (${escapePdfText(line)}) Tj ET`);
-        titleY -= 24;
-      }
-      y = titleY - 12;
+      beginPage();
     }
 
     if (y - neededHeight < margin) {
-      pages.push(current);
-      current = [];
-      y = pageHeight - margin;
+      finishPage();
       ensurePage(neededHeight);
     }
   };
@@ -231,13 +242,10 @@ export function downloadTablePdf(filename: string, documentTitle: string, sectio
 
     let x = margin + 8;
     for (const column of section.columns) {
-      const align = column.align ?? "left";
-      const textX = align === "right"
-        ? x + column.width - 18
-        : align === "center"
-          ? x + column.width / 2
-          : x;
-      current.push(`BT /F2 10 Tf ${accent} rg ${textX} ${y - 4} Td (${escapePdfText(column.label)}) Tj ET`);
+      const maxChars = Math.max(4, Math.floor((column.width - 16) / 6.2));
+      const shown = column.label.length > maxChars ? `${column.label.slice(0, maxChars - 3)}...` : column.label;
+      const textX = x;
+      current.push(`BT /F2 9 Tf ${accent} rg ${textX} ${y - 4} Td (${escapePdfText(shown)}) Tj ET`);
       x += column.width;
     }
     y -= 26;
@@ -264,12 +272,15 @@ export function downloadTablePdf(filename: string, documentTitle: string, sectio
   };
 
   sections.forEach((section) => {
+    if (section.startOnNewPage && current.length > 0) {
+      finishPage();
+    }
     drawSectionHeader(section);
     section.rows.forEach((row, index) => drawRow(section, row, index % 2 === 0));
     y -= sectionGap;
   });
 
-  if (current.length > 0) pages.push(current);
+  finishPage();
 
   const objects: string[] = [];
   objects.push("<< /Type /Catalog /Pages 2 0 R >>");

@@ -133,25 +133,26 @@ export function ResultsExportBar({ snapshot }: { snapshot: ResultsSnapshot }) {
   }
 
   function handleTeamPlayersPdf() {
-    const topTenPlayers = snapshot.squads
+    const topPlayers = snapshot.squads
       .map((entry) => ({
         playerName: entry.player?.name ?? "Unknown player",
         teamName: teamById.get(entry.teamId)?.name ?? "Unknown team",
         points: entry.player ? scorePlayer(entry.player) : 0,
+        role: entry.player?.role ?? "Player",
       }))
       .sort((left, right) => right.points - left.points || left.playerName.localeCompare(right.playerName))
-      .slice(0, 10);
+      .slice(0, 15);
     const sections = [
       {
-        title: "Top 10 Players",
+        title: "Top 15 Players",
         subtitle: "Highest fantasy scores across the room",
         columns: [
-          { key: "rank", label: "#", width: 40, align: "center" as const },
-          { key: "playerName", label: "Player", width: 236 },
-          { key: "teamName", label: "Team", width: 165 },
-          { key: "points", label: "Points", width: 74, align: "right" as const },
+          { key: "rank", label: "#", width: 36, align: "center" as const },
+          { key: "playerName", label: "Player", width: 230 },
+          { key: "teamName", label: "Team", width: 170 },
+          { key: "points", label: "Points", width: 79, align: "right" as const },
         ],
-        rows: topTenPlayers.map((player, index) => ({
+        rows: topPlayers.map((player, index) => ({
           rank: index + 1,
           playerName: player.playerName,
           teamName: player.teamName,
@@ -161,17 +162,18 @@ export function ResultsExportBar({ snapshot }: { snapshot: ResultsSnapshot }) {
       ...getTeamPlayerSheets().map(({ team, rank, players }) => ({
         title: `#${rank} ${team.name}`,
         subtitle: `${players.length} players - ${snapshot.leaderboard[rank - 1]?.totalPoints ?? 0} points`,
+        startOnNewPage: true,
         columns: [
           { key: "rank", label: "#", width: 36, align: "center" as const },
-          { key: "name", label: "Player", width: 250 },
-          { key: "role", label: "Role", width: 165 },
-          { key: "points", label: "Points", width: 64, align: "right" as const },
+          { key: "name", label: "Player", width: 270 },
+          { key: "points", label: "Points", width: 85, align: "right" as const },
+          { key: "role", label: "Position", width: 124 },
         ],
         rows: players.map((player, index) => ({
           rank: index + 1,
           name: player.name,
-          role: player.role,
           points: player.points,
+          role: player.role,
         })),
       })),
     ];
