@@ -344,33 +344,48 @@ export default function AuctionAIWidget() {
 
   return (
     <>
-      <motion.button
-        className="sfl-chatbot-pulse"
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={() => setOpen((value) => !value)}
-        style={{
-          position: "fixed",
-          bottom: "24px",
-          right: "24px",
-          width: "60px",
-          height: "60px",
-          borderRadius: "50%",
-          background: "rgba(15, 23, 42, 0.7)",
-          backdropFilter: "blur(12px)",
-          border: "1px solid rgba(99, 102, 241, 0.3)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          zIndex: 50,
-          boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 15px rgba(99, 102, 241, 0.4)",
-          overflow: "hidden"
-        }}
-        type="button"
-      >
-        <Image src="/images/sfl.png" alt="Rocky AI" width={38} height={38} style={{ objectFit: 'contain' }} />
-      </motion.button>
+      <div style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 50 }}>
+        {!open && (
+          <motion.div
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+            style={{
+              position: "absolute",
+              top: "-4px",
+              right: "-4px",
+              width: "16px",
+              height: "16px",
+              borderRadius: "50%",
+              background: "#ef4444",
+              border: "2px solid #0f172a",
+              zIndex: 51,
+              boxShadow: "0 0 10px rgba(239, 68, 68, 0.8)",
+            }}
+          />
+        )}
+        <motion.button
+          className="sfl-chatbot-pulse"
+          whileHover={{ scale: 1.1, rotate: 5 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setOpen((value) => !value)}
+          style={{
+            width: "64px",
+            height: "64px",
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #1e1b4b 0%, #3730a3 100%)",
+            border: "2px solid rgba(165, 180, 252, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.6), inset 0 2px 10px rgba(255,255,255,0.2)",
+            overflow: "hidden"
+          }}
+          type="button"
+        >
+          <Image src="/images/sfl.png" alt="Rocky AI" width={42} height={42} style={{ objectFit: 'contain', filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.5))" }} />
+        </motion.button>
+      </div>
 
       <AnimatePresence>
         {open && (
@@ -566,6 +581,16 @@ export default function AuctionAIWidget() {
       </AnimatePresence>
 
       <style jsx>{`
+        @keyframes premium-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.6), 0 10px 30px rgba(0,0,0,0.6); }
+          70% { box-shadow: 0 0 0 22px rgba(99, 102, 241, 0), 0 10px 30px rgba(0,0,0,0.6); }
+          100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0), 0 10px 30px rgba(0,0,0,0.6); }
+        }
+        .sfl-chatbot-pulse {
+          animation: premium-pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
         .sfl-chatbot-window {
           position: fixed;
           bottom: 100px;
