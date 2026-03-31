@@ -215,6 +215,11 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     const phase = optimisticPhase ?? localAuctionState.phase;
     if (phase !== "LIVE" || !localAuctionState.expiresAt) return;
 
+    setRemainingSeconds((prev) => {
+       const actual = getRemainingSeconds(localAuctionState.expiresAt);
+       return Math.abs(actual - prev) > 2 ? actual : prev;
+    });
+
     const interval = window.setInterval(() => {
       setRemainingSeconds((prev) => Math.max(0, prev - 1));
     }, 1000);

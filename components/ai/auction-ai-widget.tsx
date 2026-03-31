@@ -391,19 +391,26 @@ export default function AuctionAIWidget() {
         {open && (
           <motion.div
             className="sfl-chatbot-window"
-            initial={{ opacity: 0, y: 30, scale: 0.9, filter: "blur(8px)" }}
-            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: 20, scale: 0.95, filter: "blur(4px)" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
             style={{
-              background: "linear-gradient(180deg, rgba(15,23,42,0.85) 0%, rgba(9,14,23,0.95) 100%)",
-              backdropFilter: "blur(20px)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-              borderTop: "1px solid rgba(99, 102, 241, 0.3)",
+              position: "fixed",
+              bottom: "106px",
+              right: "24px",
+              width: "360px",
+              maxWidth: "calc(100vw - 48px)",
+              height: "500px",
+              maxHeight: "calc(100dvh - 140px)",
+              background: "rgba(15, 23, 42, 0.75)",
+              backdropFilter: "blur(16px)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              borderRadius: "16px",
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
-              boxShadow: "0 24px 48px rgba(0,0,0,0.6), 0 0 20px rgba(99,102,241,0.15)",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
               zIndex: 50,
             }}
           >
@@ -445,16 +452,15 @@ export default function AuctionAIWidget() {
                   >
                     <div
                       style={{
-                        padding: "12px 16px",
-                        borderRadius: chatMessage.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                        background: chatMessage.role === "user" ? "linear-gradient(135deg, #6366f1 0%, #4338ca 100%)" : "rgba(30, 41, 59, 0.6)",
-                        border: chatMessage.role === "user" ? "none" : "1px solid rgba(255,255,255,0.08)",
+                        padding: "10px 14px",
+                        borderRadius: chatMessage.role === "user" ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
+                        background: chatMessage.role === "user" ? "linear-gradient(135deg, #6366f1, #4f46e5)" : "rgba(255,255,255,0.08)",
+                        border: chatMessage.role === "user" ? "none" : "1px solid rgba(255,255,255,0.1)",
                         color: "white",
                         fontSize: "14px",
                         lineHeight: 1.5,
                         whiteSpace: "pre-wrap",
-                        boxShadow: chatMessage.role === "user" ? "0 4px 15px rgba(99,102,241,0.3)" : "0 4px 12px rgba(0,0,0,0.1)",
-                        backdropFilter: chatMessage.role === "user" ? "none" : "blur(8px)"
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                       }}
                     >
                       {chatMessage.text}
@@ -589,30 +595,6 @@ export default function AuctionAIWidget() {
         .sfl-chatbot-pulse {
           animation: premium-pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
           transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-
-        .sfl-chatbot-window {
-          position: fixed;
-          bottom: 100px;
-          right: 24px;
-          width: 360px;
-          max-width: calc(100vw - 48px);
-          height: 500px;
-          max-height: calc(100dvh - 140px);
-          border-radius: 20px;
-        }
-
-        @media (max-width: 600px) {
-          .sfl-chatbot-window {
-            bottom: 0 !important;
-            right: 0 !important;
-            width: 100vw !important;
-            max-width: 100vw !important;
-            height: 100dvh !important;
-            max-height: 100dvh !important;
-            border-radius: 0 !important;
-            z-index: 100 !important;
-          }
         }
 
         .sfl-chat-scroll::-webkit-scrollbar {
