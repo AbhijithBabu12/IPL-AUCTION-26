@@ -58,12 +58,13 @@ export async function POST(
     // 3. Delete existing players then insert fresh
     await admin.from("players").delete().eq("room_id", room.id);
 
-    const playerRows = parsedPlayers.map((p) => ({
+    const playerRows = parsedPlayers.map((p, i) => ({
       room_id: room.id,
       name: p.name,
       role: p.role ?? "All-Rounder",
       base_price: p.basePrice ?? 10,
       status: "AVAILABLE",
+      order_index: i + 1,
       stats: { iplTeam: p.iplTeam ?? null },
     }));
 
