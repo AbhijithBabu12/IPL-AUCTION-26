@@ -345,24 +345,6 @@ export default function AuctionAIWidget() {
   return (
     <>
       <div style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 50 }}>
-        {!open && (
-          <motion.div
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ repeat: Infinity, duration: 2 }}
-            style={{
-              position: "absolute",
-              top: "-4px",
-              right: "-4px",
-              width: "16px",
-              height: "16px",
-              borderRadius: "50%",
-              background: "#ef4444",
-              border: "2px solid #0f172a",
-              zIndex: 51,
-              boxShadow: "0 0 10px rgba(239, 68, 68, 0.8)",
-            }}
-          />
-        )}
         <motion.button
           className="sfl-chatbot-pulse"
           whileHover={{ scale: 1.1, rotate: 5 }}
