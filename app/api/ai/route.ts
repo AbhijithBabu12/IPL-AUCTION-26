@@ -168,6 +168,9 @@ Supported actions:
 
 If the user says something like "bid 50L" or "bid 1Cr", return:
 { "type": "action", "action": "auction_bid", "amount_text": "50L" }
+
+If the user asks "how to join an auction", "how to play", or "how to start":
+{ "type": "navigation", "route": "/login", "message": "To join an auction, please log in first, create a team, and then you can join or start an auction room! I'll take you to the login page right now." }
 `;
 
     const finalSystemPrompt = `${identityPrompt}\n${roomContext}\n${formatConstraints}`;

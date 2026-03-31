@@ -10,7 +10,7 @@ import { formatCurrencyShort, formatIncrement, parseAmountInput, toErrorMessage 
 type ChatMessage = { role: "user" | "bot"; text: string };
 
 type AiResponse =
-  | { type: "navigation"; route?: string; target?: string }
+  | { type: "navigation"; route?: string; target?: string; message?: string }
   | {
     type: "action";
     action:
@@ -326,8 +326,12 @@ export default function AuctionAIWidget() {
       }
 
       if ("type" in data && data.type === "navigation" && data.route) {
-        const routeName = (data.route.replace(/^\//, '') || "home").replace('-', ' ');
-        pushBotMessage(`Taking you to ${routeName === 'lobby' ? 'the lobby' : routeName}`);
+        if (data.message) {
+          pushBotMessage(data.message);
+        } else {
+          const routeName = (data.route.replace(/^\//, '') || "home").replace('-', ' ');
+          pushBotMessage(`Taking you to ${routeName === 'lobby' ? 'the lobby' : routeName}`);
+        }
         router.push(data.route);
         return;
       }
