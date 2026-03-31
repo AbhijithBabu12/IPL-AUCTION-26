@@ -301,7 +301,7 @@ export default function AuctionAIWidget() {
         if (!seedRes.ok || seedData.error) {
           pushBotMessage(`Failed to seed: ${seedData.error ?? "Unknown error"}. Make sure you are the room admin.`);
         } else {
-          pushBotMessage(`✅ Done! Imported ${seedData.teamsImported ?? 10} teams and ${seedData.playersImported ?? 0} players into the room. You can now start the auction!`);
+          pushBotMessage(`✅ Done! Imported ${seedData.teamsImported ?? 10} teams and ${seedData.playersImported ?? 0} players into the room. 🎉\n\nThe 10 IPL teams are all set up too! You can now head to your room and start the auction. Say "start auction" when you're ready!`);
         }
         return;
       }
