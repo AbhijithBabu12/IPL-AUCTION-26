@@ -210,15 +210,23 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     }, 1500); // Debounced to 1.5s to prevent massive re-render stutter during rapid bidding
   }, []);
 
+  const prevPhaseRef = useRef<string | null>(null);
+
   // Timer â€” ticks down safely using a relative local interval
   useEffect(() => {
     const phase = optimisticPhase ?? localAuctionState.phase;
-    if (phase !== "LIVE" || !localAuctionState.expiresAt) return;
+    if (phase !== "LIVE" || !localAuctionState.expiresAt) {
+      prevPhaseRef.current = phase;
+      return;
+    }
 
-    setRemainingSeconds((prev) => {
-       const actual = getRemainingSeconds(localAuctionState.expiresAt);
-       return Math.abs(actual - prev) > 2 ? actual : prev;
-    });
+    if (prevPhaseRef.current === "PAUSED") {
+      setRemainingSeconds((prev) => {
+         const actual = getRemainingSeconds(localAuctionState.expiresAt);
+         return Math.abs(actual - prev) > 2 ? actual : prev;
+      });
+    }
+    prevPhaseRef.current = phase;
 
     const interval = window.setInterval(() => {
       setRemainingSeconds((prev) => Math.max(0, prev - 1));
