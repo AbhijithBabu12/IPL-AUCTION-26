@@ -1,0 +1,1 @@
+{"type":"info","message":"There are no teams with points yet. The current teams are chennai and mumbai, both with 0 points."}

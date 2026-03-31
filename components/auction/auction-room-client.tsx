@@ -8,6 +8,11 @@ import {
   AuctionChatPanel,
   type AuctionChatMessage,
 } from "@/components/auction/auction-chat-panel";
+import type {
+  AiAuctionCommand,
+  AiAuctionResponse,
+  AuctionAssistantContext,
+} from "@/components/ai/auction-ai-widget";
 import { BidPanel } from "@/components/auction/bid-panel";
 import { SquadBoard } from "@/components/auction/squad-board";
 import { TimerBar } from "@/components/auction/timer-bar";
@@ -106,6 +111,8 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
   const [bidTeamId, setBidTeamId] = useState(() => snapshot.teams[0]?.id ?? "");
   const [bidPending, setBidPending] = useState(false);
   const [bidError, setBidError] = useState<string | null>(null);
+  const [aiHighlightedIncrement, setAiHighlightedIncrement] = useState<number | null>(null);
+  const [aiHighlightOpenBid, setAiHighlightOpenBid] = useState(false);
 
   // ROUND_END â€” player picker for next round
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
@@ -126,6 +133,12 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
 
   const selectedTeam = localTeams.find((t) => t.id === bidTeamId) ?? null;
   const isLeading = selectedTeam?.id === localAuctionState.currentTeamId;
+  const recommendedIncrement =
+    currentBid !== null
+      ? allowedIncrements.find((increment) =>
+          selectedTeam ? selectedTeam.purseRemaining >= currentBid + increment : true,
+        ) ?? null
+      : null;
   const myOwnedTeam = localTeams.find((team) => team.ownerUserId === snapshot.user?.id) ?? null;
   const showPlayerBidBar = !isAdmin || Boolean(myOwnedTeam);
   const bidBarTeams = myOwnedTeam ? [myOwnedTeam] : localTeams;
@@ -171,6 +184,11 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       setBidTeamId(localTeams[0]?.id ?? "");
     }
   }, [bidTeamId, localTeams, myOwnedTeam]);
+
+  useEffect(() => {
+    setAiHighlightedIncrement(null);
+    setAiHighlightOpenBid(false);
+  }, [currentBid, localAuctionState.currentPlayerId, localAuctionState.version]);
 
   // Reset optimistic phase when server confirms update
   useEffect(() => {
@@ -708,6 +726,137 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
       setBidPending(false);
     }
   }
+
+  useEffect(() => {
+    const context: AuctionAssistantContext = {
+      roomCode: snapshot.room.code,
+      phase: effectivePhase,
+      currentPlayerName: currentPlayer?.name ?? null,
+      currentBid,
+      basePrice: currentPlayer?.basePrice ?? null,
+      currentLeadingTeamName: currentTeam?.name ?? null,
+      allowedIncrements,
+      recommendedIncrement,
+      canOpenBid: Boolean(
+        currentBid === null &&
+          currentPlayer &&
+          selectedTeam &&
+          selectedTeam.purseRemaining >= currentPlayer.basePrice,
+      ),
+      isBiddingOpen,
+    };
+
+    window.__SFL_AUCTION_CONTEXT__ = context;
+
+    const handleAiCommand = async (event: Event) => {
+      const detail = (event as CustomEvent<AiAuctionCommand>).detail;
+      if (!detail) return;
+
+      const respond = (payload: AiAuctionResponse) => {
+        window.dispatchEvent(
+          new CustomEvent<AiAuctionResponse>("sfl-ai-auction-response", {
+            detail: payload,
+          }),
+        );
+      };
+
+      if (detail.type === "highlight-best-bid") {
+        if (currentBid === null) {
+          setAiHighlightOpenBid(true);
+          setAiHighlightedIncrement(null);
+          respond({
+            ok: true,
+            message:
+              currentPlayer && selectedTeam && selectedTeam.purseRemaining >= currentPlayer.basePrice
+                ? `Highlighted the open bid for ${currentPlayer.name}.`
+                : "Open bid is not available right now.",
+            highlightedIncrement: null,
+          });
+          return;
+        }
+
+        if (recommendedIncrement !== null) {
+          setAiHighlightedIncrement(recommendedIncrement);
+          setAiHighlightOpenBid(false);
+          respond({
+            ok: true,
+            message: `Highlighted +${formatIncrement(recommendedIncrement)}.`,
+            highlightedIncrement: recommendedIncrement,
+          });
+          return;
+        }
+
+        respond({ ok: false, message: "No valid next bid option is available right now." });
+        return;
+      }
+
+      if (detail.type !== "place-bid") {
+        return;
+      }
+
+      if (!isBiddingOpen && currentBid !== null) {
+        respond({ ok: false, message: "Bidding is closed for the current player." });
+        return;
+      }
+
+      let resolvedIncrement: number | undefined;
+      if (currentBid === null) {
+        if (currentPlayer && detail.amount === currentPlayer.basePrice) {
+          resolvedIncrement = undefined;
+        } else {
+          respond({
+            ok: false,
+            message: currentPlayer
+              ? `Use ${formatCurrencyShort(currentPlayer.basePrice)} to open the bidding for ${currentPlayer.name}.`
+              : "There is no active player to bid on.",
+          });
+          return;
+        }
+      } else {
+        resolvedIncrement =
+          allowedIncrements.find((increment) => increment === detail.amount) ??
+          allowedIncrements.find((increment) => currentBid + increment === detail.amount);
+
+        if (!resolvedIncrement) {
+          respond({
+            ok: false,
+            message: `That amount is not a valid next bid. Try ${allowedIncrements
+              .map((increment) => `+${formatIncrement(increment)}`)
+              .join(", ")}.`,
+          });
+          return;
+        }
+      }
+
+      setAiHighlightOpenBid(currentBid === null);
+      setAiHighlightedIncrement(resolvedIncrement ?? null);
+      const error = await handleBid(resolvedIncrement);
+      respond({
+        ok: !error,
+        message:
+          error ??
+          (currentBid === null
+            ? `Opened the bidding for ${currentPlayer?.name ?? "the player"}.`
+            : `Placed +${formatIncrement(resolvedIncrement ?? 0)} on ${currentPlayer?.name ?? "the player"}.`),
+        highlightedIncrement: resolvedIncrement ?? null,
+      });
+    };
+
+    window.addEventListener("sfl-ai-auction-command", handleAiCommand as EventListener);
+    return () => {
+      window.removeEventListener("sfl-ai-auction-command", handleAiCommand as EventListener);
+    };
+  }, [
+    allowedIncrements,
+    currentBid,
+    currentPlayer,
+    currentTeam,
+    effectivePhase,
+    isBiddingOpen,
+    recommendedIncrement,
+    selectedTeam,
+    snapshot.room.code,
+  ]);
 
   async function sendChatEntry(kind: "text" | "emoji", text: string) {
     const payload: ChatMessagePayload = {
@@ -1329,6 +1478,8 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                 auctionState={localAuctionState}
                 currentMember={snapshot.currentMember}
                 currentPlayer={currentPlayer}
+                highlightIncrement={aiHighlightedIncrement}
+                highlightOpenBid={aiHighlightOpenBid}
                 isBiddingOpen={isBiddingOpen}
                 onBidAction={async (teamId, increment) => {
                   setBidTeamId(teamId);
@@ -1423,6 +1574,13 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
             {isFirstBid ? (
               <button
                 className="bid-button-lg"
+                style={
+                  aiHighlightOpenBid
+                    ? {
+                        boxShadow: "0 0 0 2px rgba(129, 140, 248, 0.95), 0 0 24px rgba(99, 102, 241, 0.35)",
+                      }
+                    : undefined
+                }
                 disabled={
                   !isLive ||
                   !currentPlayer ||
@@ -1447,6 +1605,14 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
                   <button
                     key={inc}
                     className={`bid-button-lg${isLeading ? " leading" : ""}`}
+                    style={
+                      aiHighlightedIncrement === inc
+                        ? {
+                            boxShadow:
+                              "0 0 0 2px rgba(129, 140, 248, 0.95), 0 0 24px rgba(99, 102, 241, 0.35)",
+                          }
+                        : undefined
+                    }
                     disabled={
                       !isBiddingOpen || !currentPlayer || isLeading || !canAfford || bidPending
                     }

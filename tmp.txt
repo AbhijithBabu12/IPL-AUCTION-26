@@ -1,0 +1,1 @@
+{"type":"info","message":"chennai and mumbai have 0 points each"}
