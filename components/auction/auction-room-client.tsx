@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -210,15 +210,13 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
     }, 75);
   }, []);
 
-  // Timer â€” stops immediately when optimistic phase is PAUSED
+  // Timer â€” ticks down safely using a relative local interval
   useEffect(() => {
-    setRemainingSeconds(getRemainingSeconds(localAuctionState.expiresAt));
-
     const phase = optimisticPhase ?? localAuctionState.phase;
     if (phase !== "LIVE" || !localAuctionState.expiresAt) return;
 
     const interval = window.setInterval(() => {
-      setRemainingSeconds(getRemainingSeconds(localAuctionState.expiresAt));
+      setRemainingSeconds((prev) => Math.max(0, prev - 1));
     }, 1000);
 
     return () => window.clearInterval(interval);
@@ -310,7 +308,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
               !(item.playerId === next.playerId && item.teamId === next.teamId && item.amount === next.amount),
           ),
         ]);
-        setRemainingSeconds(getRemainingSeconds(next.expiresAt));
+        setRemainingSeconds(snapshot.room.timerSeconds);
       })
       .on("broadcast", { event: "SKIP_VOTED" }, ({ payload }) => {
         const next = payload as SkipVotePayload;
@@ -381,7 +379,11 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
           skipVoteTeamIds: [],
           version: Math.max(curr.version + 1, next.version),
         }));
-        setRemainingSeconds(getRemainingSeconds(next.expiresAt));
+        if (next.phase === "LIVE" && next.playerId) {
+          setRemainingSeconds(snapshot.room.timerSeconds);
+        } else {
+          setRemainingSeconds(getRemainingSeconds(next.expiresAt));
+        }
 
         // Show SOLD/UNSOLD overlay directly from the broadcast payload â€”
         // this is reliable for ALL clients, including members who didn't place the bid.
@@ -533,7 +535,11 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         skipVoteTeamIds: [],
         version: curr.version + 1,
       }));
-      setRemainingSeconds(getRemainingSeconds(optimisticExpiresAt));
+      if (payload.phase === "LIVE" && payload.playerId) {
+        setRemainingSeconds(snapshot.room.timerSeconds);
+      } else {
+        setRemainingSeconds(getRemainingSeconds(optimisticExpiresAt));
+      }
 
       // Fire the overlay directly for the admin (other users get it from the AUCTION_ADVANCED broadcast handler)
       if (currentPlayer) {
@@ -636,6 +642,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
         skipVoteTeamIds: [],
         version: curr.version + 1,
       }));
+      setRemainingSeconds(selectedPlayerIds[0] != null ? snapshot.room.timerSeconds : 0);
       setSelectedPlayerIds([]);
       channelRef.current?.send({ type: "broadcast", event: "REFRESH_ROOM" });
       refreshRoom();
@@ -702,7 +709,7 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
           },
           ...curr,
         ]);
-        setRemainingSeconds(getRemainingSeconds(nextExpiresAt));
+        setRemainingSeconds(snapshot.room.timerSeconds);
         channelRef.current?.send({
           type: "broadcast",
           event: ROOM_EVENTS.newBid,
@@ -1295,31 +1302,6 @@ export function AuctionRoomClient({ snapshot }: { snapshot: AuctionSnapshot }) {
 
             {/* Timer */}
             <div className="panel">
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "0.6rem",
-                }}
-              >
-                <h3 style={{ margin: 0 }}>
-                  {isPaused ? "Paused" : isLive ? "Live timer" : effectivePhase}
-                </h3>
-                <strong
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "1.6rem",
-                    letterSpacing: "-0.03em",
-                    color:
-                      remainingSeconds <= 10 && isLive
-                        ? "var(--danger)"
-                        : "var(--primary-strong)",
-                  }}
-                >
-                  {remainingSeconds}s
-                </strong>
-              </div>
               <TimerBar
                 isPaused={isPaused}
                 remainingSeconds={remainingSeconds}
