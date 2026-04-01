@@ -27,12 +27,14 @@ async function placeBid(
 function BidButton({
   children,
   disabled,
+  highlighted,
   onClick,
   style,
   title,
 }: {
   children: React.ReactNode;
   disabled: boolean;
+  highlighted?: boolean;
   onClick: () => void;
   style?: React.CSSProperties;
   title?: string;
@@ -43,7 +45,15 @@ function BidButton({
       className="button"
       disabled={disabled}
       onClick={onClick}
-      style={style}
+      style={{
+        ...(highlighted
+          ? {
+              boxShadow: "0 0 0 2px rgba(129, 140, 248, 0.95), 0 0 24px rgba(99, 102, 241, 0.35)",
+              borderColor: "rgba(129, 140, 248, 0.95)",
+            }
+          : {}),
+        ...style,
+      }}
       title={title}
       type="button"
       whileHover={reduced || disabled ? undefined : { scale: 1.04, y: -2 }}
@@ -62,6 +72,8 @@ function IncrementButtons({
   roomCode,
   anyPending,
   isBiddingOpen,
+  highlightIncrement,
+  highlightOpenBid,
   onPendingChange,
   onError,
   onBidAction,
@@ -72,6 +84,8 @@ function IncrementButtons({
   roomCode: string;
   anyPending: boolean;
   isBiddingOpen: boolean;
+  highlightIncrement?: number | null;
+  highlightOpenBid?: boolean;
   onPendingChange: (teamId: string | null) => void;
   onError: (msg: string | null) => void;
   onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
@@ -90,6 +104,7 @@ function IncrementButtons({
     return (
       <BidButton
         disabled={disabled}
+        highlighted={Boolean(highlightOpenBid)}
         onClick={async () => {
           onPendingChange(team.id);
           onError(null);
@@ -117,6 +132,7 @@ function IncrementButtons({
         return (
           <BidButton
             disabled={disabled}
+            highlighted={highlightIncrement === inc}
             key={inc}
             onClick={async () => {
               onPendingChange(team.id);
@@ -146,6 +162,8 @@ function AdminBidPanel({
   teams,
   onBidAction,
   isBiddingOpen,
+  highlightIncrement,
+  highlightOpenBid,
 }: {
   roomCode: string;
   auctionState: AuctionState;
@@ -153,6 +171,8 @@ function AdminBidPanel({
   teams: Team[];
   onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
   isBiddingOpen?: boolean;
+  highlightIncrement?: number | null;
+  highlightOpenBid?: boolean;
 }) {
   const [pendingTeamId, setPendingTeamId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -214,6 +234,8 @@ function AdminBidPanel({
                 anyPending={Boolean(pendingTeamId)}
                 auctionState={auctionState}
                 currentPlayer={currentPlayer}
+                highlightIncrement={highlightIncrement}
+                highlightOpenBid={highlightOpenBid}
                 isBiddingOpen={Boolean(isBiddingOpen)}
                 onError={setError}
                 onPendingChange={setPendingTeamId}
@@ -237,6 +259,8 @@ export function BidPanel({
   currentMember,
   onBidAction,
   isBiddingOpen,
+  highlightIncrement,
+  highlightOpenBid,
 }: {
   roomCode: string;
   auctionState: AuctionState;
@@ -246,6 +270,8 @@ export function BidPanel({
   onBidAction?: (teamId: string, increment?: number) => Promise<string | null>;
   onSkipVoteAction?: (teamId: string) => Promise<string | null>;
   isBiddingOpen?: boolean;
+  highlightIncrement?: number | null;
+  highlightOpenBid?: boolean;
 }) {
   const router = useRouter();
   const reduced = useReducedMotion();
@@ -264,6 +290,8 @@ export function BidPanel({
       <AdminBidPanel
         auctionState={auctionState}
         currentPlayer={currentPlayer}
+        highlightIncrement={highlightIncrement}
+        highlightOpenBid={highlightOpenBid}
         isBiddingOpen={isBiddingOpen}
         onBidAction={onBidAction}
         roomCode={roomCode}
@@ -333,6 +361,7 @@ export function BidPanel({
       {isFirstBid ? (
         <BidButton
           disabled={!canBid || !isBiddingOpen || pending || !selectedTeam || selectedTeam.purseRemaining < (currentPlayer?.basePrice ?? 0)}
+          highlighted={Boolean(highlightOpenBid)}
           onClick={() => void handleIncrementBid(undefined)}
           style={{ width: "100%" }}
         >
@@ -348,6 +377,7 @@ export function BidPanel({
             return (
               <BidButton
                 disabled={disabled}
+                highlighted={highlightIncrement === inc}
                 key={inc}
                 onClick={() => void handleIncrementBid(inc)}
                 style={{ flex: "1", minWidth: "3.5rem", fontSize: "0.85rem" }}

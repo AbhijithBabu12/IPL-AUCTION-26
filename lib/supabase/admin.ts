@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
 import { appConfig, assertServiceRoleEnv } from "@/lib/config";
+import dns from "node:dns";
+
+dns.setDefaultResultOrder("ipv4first");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = ReturnType<typeof createClient<any>>;

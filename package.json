@@ -6,9 +6,9 @@
     "node": "20.x"
   },
   "scripts": {
-    "dev": "next dev -p 10000",
-    "build": "next build && node scripts/copy-standalone.mjs",
-    "start": "next start",
+    "dev": "cross-env NODE_OPTIONS=\"--dns-result-order=ipv4first\" next dev -p 10000",
+    "build": "cross-env NODE_OPTIONS=\"--dns-result-order=ipv4first\" next build && node scripts/copy-standalone.mjs",
+    "start": "cross-env NODE_OPTIONS=\"--dns-result-order=ipv4first\" next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
@@ -30,6 +30,7 @@
     "@types/papaparse": "^5.3.15",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "cross-env": "^10.1.0",
     "eslint": "^9.19.0",
     "eslint-config-next": "^15.0.0",
     "typescript": "^5.7.3"
