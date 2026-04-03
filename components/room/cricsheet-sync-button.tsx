@@ -9,6 +9,7 @@ interface SyncResult {
   season?: string;
   matchesProcessed?: number;
   matchesSkipped?: number;
+  matchesAlreadyAccepted?: number;
   playersMatched?: number;
   playersUnmatched?: number;
   unmatchedNames?: string[];
@@ -157,6 +158,9 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
           <strong>Sync complete for {result.season}</strong>
           <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
             <span className="pill">{result.matchesProcessed} matches processed</span>
+            {(result.matchesAlreadyAccepted ?? 0) > 0 && (
+              <span className="pill">{result.matchesAlreadyAccepted} already accepted, skipped</span>
+            )}
             <span className="pill highlight">{result.playersMatched} players matched</span>
             {(result.playersUnmatched ?? 0) > 0 && (
               <span className="pill">{result.playersUnmatched} unmatched</span>
