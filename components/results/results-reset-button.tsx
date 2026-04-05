@@ -24,7 +24,7 @@ export function ResultsResetButton({ roomCode }: { roomCode: string }) {
       const payload = (await response.json()) as {
         error?: string;
         playersReset?: number;
-        approvalsReset?: number;
+        syncRowsCleared?: number;
       };
 
       if (!response.ok) {
@@ -33,7 +33,7 @@ export function ResultsResetButton({ roomCode }: { roomCode: string }) {
 
       setConfirmOpen(false);
       setMessage(
-        `Reset points for ${payload.playersReset ?? 0} players and cleared ${payload.approvalsReset ?? 0} accepted match approvals.`,
+        `Reset points for ${payload.playersReset ?? 0} players and cleared ${payload.syncRowsCleared ?? 0} stored live-score rows.`,
       );
       router.refresh();
     } catch (resetError) {
@@ -74,7 +74,7 @@ export function ResultsResetButton({ roomCode }: { roomCode: string }) {
               <h3 style={{ margin: 0 }}>Reset room points</h3>
             </div>
             <p className="subtle" style={{ margin: 0, lineHeight: 1.6 }}>
-              Reset all player points in this room and clear accepted live-score approvals so you can approve and calculate them again from scratch?
+              Reset all player points in this room and clear the stored live-score sync data so you can fetch, approve, and calculate everything again from scratch?
             </p>
             <div className="app-modal-actions">
               <button
