@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { SiteLogo } from "@/components/site-logo";
+
+export const metadata: Metadata = {
+  title: "Sign In | SFL Fantasy IPL",
+  description:
+    "Sign in or create your SFL account to join a fantasy IPL auction room, build your squad, and compete with friends.",
+  alternates: { canonical: "/login" },
+  robots: { index: false, follow: false },
+};
 
 import {
   getLoginAuthErrorMessage,

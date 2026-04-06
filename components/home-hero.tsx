@@ -7,9 +7,9 @@ import { SiteLogo } from "@/components/site-logo";
 import { fadeUp, staggerContainer, spring } from "@/lib/animations";
 
 const statTiles = [
-  { title: "Live auction rooms", desc: "Create a room, invite your group, and run the auction together in real time." },
-  { title: "Fantasy squad building", desc: "Buy players, manage your purse, and build the team you want for the season." },
-  { title: "Results and room control", desc: "Track sold players, room progress, squads, and results in one place." },
+  { title: "Live IPL auction rooms", desc: "Create a private room, share a code with your group, and run the live IPL player auction together." },
+  { title: "Fantasy squad building", desc: "Bid on IPL players, manage your purse, and build the fantasy team you want for the season." },
+  { title: "Real-time results", desc: "Track every sold player, squad composition, purse standings, and final results in one place." },
 ];
 
 export function HomeHero() {
@@ -44,12 +44,13 @@ export function HomeHero() {
           Fantasy IPL Auction Game
         </motion.span>
         <motion.h1 variants={reduced ? undefined : fadeUp}>
-          Build your SFL fantasy IPL team through live auctions.
+          Build your fantasy IPL team through live player auctions.
         </motion.h1>
         <motion.p className="subtle" variants={reduced ? undefined : fadeUp}>
-          SFL, St. Thomas Fantasy League, is a fantasy game built for creating
-          IPL teams through auctions, shaping squads with strategy, and then
-          battling it out after the auction is done. It is actually GAMBLING.
+          SFL — St. Thomas Fantasy League — is a live fantasy IPL auction
+          platform. Create a private room, invite your group, bid on real IPL
+          players, manage your purse, and shape the squad you want. Points are
+          scored based on real match performance after the IPL season begins.
         </motion.p>
 
         <motion.div
