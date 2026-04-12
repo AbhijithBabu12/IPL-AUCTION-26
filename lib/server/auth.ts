@@ -127,3 +127,20 @@ export async function requireApiUser() {
 
   return user;
 }
+
+export async function requireSuperAdmin() {
+  const user = await requireApiUser();
+  const admin = getSupabaseAdminClient();
+
+  const { data: profile } = await admin
+    .from("users")
+    .select("is_superadmin")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile?.is_superadmin) {
+    throw new AppError("Superadmin access required.", 403, "SUPERADMIN_REQUIRED");
+  }
+
+  return user;
+}

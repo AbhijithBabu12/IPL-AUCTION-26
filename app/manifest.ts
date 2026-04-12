@@ -20,7 +20,7 @@ export default function manifest(): MetadataRoute.Manifest {
         src: "/images/sfl.png",
         sizes: "512x512",
         type: "image/png",
-        purpose: "any maskable",
+        purpose: "maskable",
       },
     ],
     categories: ["games", "sports", "entertainment"],

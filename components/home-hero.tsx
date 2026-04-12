@@ -28,6 +28,9 @@ export function HomeHero() {
           <motion.div whileHover={reduced ? undefined : { scale: 1.03 }} whileTap={reduced ? undefined : { scale: 0.97 }} transition={spring.snappy}>
             <Link className="button ghost" href="/login">Sign in</Link>
           </motion.div>
+          <motion.div whileHover={reduced ? undefined : { scale: 1.03 }} whileTap={reduced ? undefined : { scale: 0.97 }} transition={spring.snappy}>
+            <Link className="button ghost" href="/signup">Create account</Link>
+          </motion.div>
           <motion.div whileHover={reduced ? undefined : { scale: 1.04, y: -1 }} whileTap={reduced ? undefined : { scale: 0.97 }} transition={spring.snappy}>
             <Link className="button" href="/lobby">Open lobby</Link>
           </motion.div>

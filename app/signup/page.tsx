@@ -8,18 +8,18 @@ import {
   getLoginAuthNoticeMessage,
   sanitizeNextPath,
 } from "@/lib/auth-errors";
-import { signInWithPasswordAction } from "@/app/login/actions";
+import { signUpWithPasswordAction } from "@/app/login/actions";
 import { hasBrowserSupabaseEnv } from "@/lib/config";
 import { getSessionUser } from "@/lib/server/auth";
 
 export const metadata: Metadata = {
-  title: "Sign In | SFL Fantasy IPL",
-  description: "Sign in to your SFL account to join a fantasy IPL auction room.",
-  alternates: { canonical: "/login" },
+  title: "Create Account | SFL Fantasy IPL",
+  description: "Create your SFL account to join a fantasy IPL auction room and build your team.",
+  alternates: { canonical: "/signup" },
   robots: { index: false, follow: false },
 };
 
-export default async function LoginPage({
+export default async function SignupPage({
   searchParams,
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -47,13 +47,13 @@ export default async function LoginPage({
             <SiteLogo suffix="Fantasy League" />
           </div>
           <p className="subtle" style={{ marginTop: "0.5rem", fontSize: "0.92rem" }}>
-            Sign in to your account to continue
+            Create your account and join the league
           </p>
         </div>
 
         {!hasBrowserSupabaseEnv && (
           <div className="notice warning" style={{ marginBottom: "1rem" }}>
-            Sign in is not ready yet. Finish the app setup first.
+            Sign up is not ready yet. Finish the app setup first.
           </div>
         )}
         {authError && (
@@ -68,16 +68,29 @@ export default async function LoginPage({
         )}
 
         {hasBrowserSupabaseEnv && (
-          <form action={signInWithPasswordAction} className="form-grid">
+          <form action={signUpWithPasswordAction} className="form-grid">
             <input type="hidden" name="next" value={next} />
 
             <div className="field">
-              <label htmlFor="login-email">Email</label>
+              <label htmlFor="signup-username">Display name</label>
+              <input
+                required
+                autoComplete="nickname"
+                className="input"
+                id="signup-username"
+                name="username"
+                type="text"
+                placeholder="How others will see you"
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="signup-email">Email</label>
               <input
                 required
                 autoComplete="email"
                 className="input"
-                id="login-email"
+                id="signup-email"
                 name="email"
                 type="email"
                 placeholder="you@example.com"
@@ -85,28 +98,29 @@ export default async function LoginPage({
             </div>
 
             <div className="field">
-              <label htmlFor="login-password">Password</label>
+              <label htmlFor="signup-password">Password</label>
               <input
                 required
-                autoComplete="current-password"
+                minLength={6}
+                autoComplete="new-password"
                 className="input"
-                id="login-password"
+                id="signup-password"
                 name="password"
                 type="password"
-                placeholder="Your password"
+                placeholder="At least 6 characters"
               />
             </div>
 
-            <button className="button secondary" type="submit" style={{ marginTop: "0.25rem" }}>
-              Sign in
+            <button className="button" type="submit" style={{ marginTop: "0.25rem" }}>
+              Create account
             </button>
           </form>
         )}
 
         <div className="auth-switch">
-          Don&apos;t have an account?{" "}
-          <Link href={next !== "/lobby" ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}>
-            Create one
+          Already have an account?{" "}
+          <Link href={next !== "/lobby" ? `/login?next=${encodeURIComponent(next)}` : "/login"}>
+            Sign in
           </Link>
         </div>
       </div>

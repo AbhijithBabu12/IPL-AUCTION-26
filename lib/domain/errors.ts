@@ -1,3 +1,5 @@
+import { ZodError } from "zod";
+
 export class AppError extends Error {
   status: number;
   code: string;
@@ -13,6 +15,18 @@ export class AppError extends Error {
 export function asAppError(error: unknown) {
   if (error instanceof AppError) {
     return error;
+  }
+
+  // Zod validation errors — don't expose schema field paths to the client
+  if (error instanceof ZodError) {
+    const fieldNames = error.errors
+      .map((e) => e.path[e.path.length - 1])
+      .filter(Boolean)
+      .join(", ");
+    const message = fieldNames
+      ? `Invalid input: ${fieldNames}`
+      : "Invalid input.";
+    return new AppError(message, 400, "VALIDATION_ERROR");
   }
 
   if (error instanceof Error) {

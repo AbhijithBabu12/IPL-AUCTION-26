@@ -4,6 +4,8 @@ import { Outfit, Inter } from "next/font/google";
 import IntroSplashWrapper from "@/components/intro-splash-wrapper";
 import { AmbientBackground } from "@/components/ambient-background";
 import AuctionAIWidget from "@/components/ai/auction-ai-widget";
+import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { getSessionUser } from "@/lib/server/auth";
 
 import "./globals.css";
 
@@ -184,11 +186,15 @@ const jsonLd = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: ReactNode;
 }) {
+  // Fetch user on the server so the sidebar has profile data on first render.
+  // Never throws — returns null when Supabase isn't configured or user is logged out.
+  const user = await getSessionUser().catch(() => null);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -201,6 +207,7 @@ export default function RootLayout({
       <body className={`${displayFont.variable} ${bodyFont.variable}`}>
         <AmbientBackground />
         <IntroSplashWrapper />
+        <AppSidebar user={user} />
 
         {children}
 

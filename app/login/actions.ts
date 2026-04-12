@@ -11,11 +11,13 @@ import { hasBrowserSupabaseEnv } from "@/lib/config";
 import { syncUserProfileFromAuthUser } from "@/lib/server/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-function buildLoginRedirect({
+function buildAuthRedirect({
+  page,
   authError,
   authNotice,
   next,
 }: {
+  page: "/login" | "/signup";
   authError?: string;
   authNotice?: string;
   next: string;
@@ -35,7 +37,12 @@ function buildLoginRedirect({
   }
 
   const query = searchParams.toString();
-  return query ? `/login?${query}` : "/login";
+  return query ? `${page}?${query}` : page;
+}
+
+/** @deprecated use buildAuthRedirect */
+function buildLoginRedirect(args: { authError?: string; authNotice?: string; next: string }) {
+  return buildAuthRedirect({ page: "/login", ...args });
 }
 
 function getFormValue(formData: FormData, key: string) {
@@ -87,7 +94,7 @@ export async function signUpWithPasswordAction(formData: FormData) {
   const next = sanitizeNextPath(getFormValue(formData, "next"));
 
   if (!hasBrowserSupabaseEnv) {
-    redirect(buildLoginRedirect({ authError: "supabase_not_configured", next }));
+    redirect(buildAuthRedirect({ page: "/signup", authError: "supabase_not_configured", next }));
   }
 
   const username = getFormValue(formData, "username").trim();
@@ -95,7 +102,7 @@ export async function signUpWithPasswordAction(formData: FormData) {
   const password = getFormValue(formData, "password");
 
   if (!username || !email || !password) {
-    redirect(buildLoginRedirect({ authError: "missing_credentials", next }));
+    redirect(buildAuthRedirect({ page: "/signup", authError: "missing_credentials", next }));
   }
 
   const supabase = await createSupabaseServerClient();
@@ -113,7 +120,8 @@ export async function signUpWithPasswordAction(formData: FormData) {
 
   if (error || !data.user) {
     redirect(
-      buildLoginRedirect({
+      buildAuthRedirect({
+        page: "/signup",
         authError: getLoginAuthErrorCode(error?.message, "credential_auth_failed"),
         next,
       }),
@@ -125,5 +133,5 @@ export async function signUpWithPasswordAction(formData: FormData) {
     redirect(next);
   }
 
-  redirect(buildLoginRedirect({ authNotice: "check_email", next }));
+  redirect(buildAuthRedirect({ page: "/signup", authNotice: "check_email", next }));
 }
