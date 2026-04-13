@@ -23,7 +23,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const SOURCE_PRIORITY = ["cricsheet", "cricketdata", "rapidapi", "atd"];
+const SOURCE_PRIORITY = ["cricsheet", "rapidapi"];
 
 export async function POST(request: Request) {
   try {

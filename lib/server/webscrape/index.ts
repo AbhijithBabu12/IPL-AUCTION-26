@@ -1,18 +1,14 @@
 /**
- * Fallback orchestrator — tries each tier in order until one succeeds.
+ * Fallback orchestrator — only RapidAPI Cricbuzz is supported.
  *
- * Tier 1: CricketData.org         (CRICKETDATA_API_KEY)
- * Tier 2: RapidAPI Cricbuzz       (RAPIDAPI_KEY)
- * Tier 3: AllThingsDev Cricbuzz   (ATD_API_KEY)
+ * Tier 1: RapidAPI Cricbuzz  (RAPIDAPI_KEY)
  */
 
-import { fetchIPLMatchesFromCricketData } from "./cricketdata";
 import { fetchIPLMatchesFromRapidAPI } from "./rapidapi";
-import { fetchIPLMatchesFromATD } from "./atd";
 import type { NormalizedMatch } from "./parser";
 
 export type { NormalizedMatch, PlayerMatchStats } from "./parser";
-export type WebscrapeProviderId = "cricketdata" | "rapidapi" | "atd";
+export type WebscrapeProviderId = "rapidapi";
 
 export interface FetchResult {
   matches: NormalizedMatch[];
@@ -21,19 +17,13 @@ export interface FetchResult {
 }
 
 const PROVIDER_LABELS: Record<WebscrapeProviderId, string> = {
-  cricketdata: "CricketData.org",
   rapidapi: "RapidAPI / Cricbuzz",
-  atd: "AllThingsDev / Cricbuzz",
 };
 
 function isProviderConfigured(provider: WebscrapeProviderId): boolean {
   switch (provider) {
-    case "cricketdata":
-      return Boolean(process.env.CRICKETDATA_API_KEY);
     case "rapidapi":
       return Boolean(process.env.RAPIDAPI_KEY || process.env.RAPIDAPI_KEY_2);
-    case "atd":
-      return Boolean(process.env.ATD_API_KEY);
   }
 }
 
@@ -51,20 +41,8 @@ export async function fetchIPLMatchesFromProvider(
   }
 
   switch (provider) {
-    case "cricketdata": {
-      const matches = await fetchIPLMatchesFromCricketData(season, (d, t) =>
-        onProgress?.(d, t, getProviderLabel(provider)),
-      );
-      return { matches, source: provider, errors: {} };
-    }
     case "rapidapi": {
       const matches = await fetchIPLMatchesFromRapidAPI(season, (d, t) =>
-        onProgress?.(d, t, getProviderLabel(provider)),
-      );
-      return { matches, source: provider, errors: {} };
-    }
-    case "atd": {
-      const matches = await fetchIPLMatchesFromATD(season, (d, t) =>
         onProgress?.(d, t, getProviderLabel(provider)),
       );
       return { matches, source: provider, errors: {} };
@@ -78,21 +56,7 @@ export async function fetchIPLMatchesWithFallback(
 ): Promise<FetchResult> {
   const errors: Record<string, string> = {};
 
-  // ── Tier 1: CricketData.org ───────────────────────────────────────────────
-  if (process.env.CRICKETDATA_API_KEY) {
-    try {
-      const matches = await fetchIPLMatchesFromCricketData(season, (d, t) =>
-        onProgress?.(d, t, "CricketData.org"),
-      );
-      return { matches, source: "cricketdata", errors };
-    } catch (e) {
-      errors["cricketdata"] = String(e);
-    }
-  } else {
-    errors["cricketdata"] = "CRICKETDATA_API_KEY not set";
-  }
-
-  // ── Tier 2: RapidAPI Cricbuzz ─────────────────────────────────────────────
+  // RapidAPI Cricbuzz
   if (process.env.RAPIDAPI_KEY) {
     try {
       const matches = await fetchIPLMatchesFromRapidAPI(season, (d, t) =>
@@ -106,20 +70,6 @@ export async function fetchIPLMatchesWithFallback(
     errors["rapidapi"] = "RAPIDAPI_KEY not set";
   }
 
-  // ── Tier 3: AllThingsDev Cricbuzz ─────────────────────────────────────────
-  if (process.env.ATD_API_KEY) {
-    try {
-      const matches = await fetchIPLMatchesFromATD(season, (d, t) =>
-        onProgress?.(d, t, "AllThingsDev"),
-      );
-      return { matches, source: "atd", errors };
-    } catch (e) {
-      errors["atd"] = String(e);
-    }
-  } else {
-    errors["atd"] = "ATD_API_KEY not set";
-  }
-
   throw new Error(
     `All cricket data providers failed:\n${Object.entries(errors)
       .map(([k, v]) => `  ${k}: ${v}`)
@@ -131,19 +81,9 @@ export async function fetchIPLMatchesWithFallback(
 export function availableProviders(): Array<{ id: string; label: string; configured: boolean }> {
   return [
     {
-      id: "cricketdata",
-      label: PROVIDER_LABELS.cricketdata,
-      configured: isProviderConfigured("cricketdata"),
-    },
-    {
       id: "rapidapi",
       label: PROVIDER_LABELS.rapidapi,
       configured: isProviderConfigured("rapidapi"),
-    },
-    {
-      id: "atd",
-      label: PROVIDER_LABELS.atd,
-      configured: isProviderConfigured("atd"),
     },
   ];
 }

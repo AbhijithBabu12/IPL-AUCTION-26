@@ -4,7 +4,7 @@
  *   Requires room membership + user_score_fetch flag ON (or room admin always).
  *
  * POST /api/rooms/[code]/auto-sync
- *   Body: { season?: string, provider?: "rapidapi" | "cricketdata" | "atd" }
+ *   Body: { season?: string, provider?: "rapidapi" }
  *   Fetches live IPL scores from the chosen provider, auto-accepts all new
  *   matches, and rebuilds player stats. No manual review step.
  *   Requires room membership + user_score_fetch flag ON (or room admin always).
@@ -31,7 +31,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 function isProviderId(v: unknown): v is WebscrapeProviderId {
-  return v === "cricketdata" || v === "rapidapi" || v === "atd";
+  return v === "rapidapi";
 }
 
 async function checkAccess(code: string, userId: string) {

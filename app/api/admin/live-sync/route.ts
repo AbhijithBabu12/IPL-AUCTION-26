@@ -1,8 +1,8 @@
 /**
  * POST /api/admin/live-sync
  *
- * Global admin only. Fetches live IPL scorecards from configured API providers
- * (CricketData, RapidAPI, ATD) and upserts results into global_match_results.
+ * Global admin only. Fetches live IPL scorecards from RapidAPI Cricbuzz
+ * and upserts results into global_match_results.
  * Does NOT push to rooms — admin reviews and accepts via /api/admin/accept-match.
  *
  * GET /api/admin/live-sync  — returns stored global comparison without fetching.
@@ -28,7 +28,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 function isProviderId(value: unknown): value is WebscrapeProviderId {
-  return value === "cricketdata" || value === "rapidapi" || value === "atd";
+  return value === "rapidapi";
 }
 
 function normalizeCalculatedPoints(
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: false,
         error: "No cricket API keys configured.",
-        detail: "Add CRICKETDATA_API_KEY or RAPIDAPI_KEY to your environment.",
+        detail: "Add RAPIDAPI_KEY to your environment.",
         providers,
       }, { status: 400 });
     }

@@ -32,7 +32,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 function isProviderId(value: unknown): value is WebscrapeProviderId {
-  return value === "cricketdata" || value === "rapidapi" || value === "atd";
+  return value === "rapidapi";
 }
 
 function normalizeCalculatedPoints(
