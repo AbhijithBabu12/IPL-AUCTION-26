@@ -430,9 +430,11 @@ function PointsManagementPanel() {
   const [selectedRoomCode, setSelectedRoomCode] = useState<string>("all");
   const [resetting, setResetting] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
+  const [dbResetting, setDbResetting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDbReset, setConfirmDbReset] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -506,7 +508,36 @@ function PointsManagementPanel() {
     }
   }
 
-  const busy = resetting || recalculating;
+  async function handleDbReset() {
+    setDbResetting(true);
+    setConfirmDbReset(false);
+    setMessage(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/db-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(scope ? { roomCode: scope } : {}),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        roomsReset?: number;
+        playersReset?: number;
+        matchRowsDeleted?: number;
+      };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "DB reset failed.");
+      setMessage(
+        `Full DB reset: ${data.playersReset ?? 0} players zeroed, ${data.matchRowsDeleted ?? 0} match rows deleted across ${data.roomsReset ?? 0} rooms.`,
+      );
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setDbResetting(false);
+    }
+  }
+
+  const busy = resetting || recalculating || dbResetting;
 
   return (
     <div
@@ -516,8 +547,11 @@ function PointsManagementPanel() {
       <span className="eyebrow">Maintenance</span>
       <h2 style={{ marginTop: "0.4rem", marginBottom: "0.5rem" }}>Points Management</h2>
       <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
-        Reset zeroes all player points without deleting match data.
-        Recalculate rebuilds from all accepted match results.
+        <strong>Reset points</strong> zeroes player stats but keeps match data — follow with Update Points to rebuild.
+        <br />
+        <strong>Update points</strong> rebuilds from all accepted match results.
+        <br />
+        <strong>Full DB reset</strong> zeroes stats AND deletes all match rows — requires a fresh sync afterwards.
       </p>
 
       <div className="field" style={{ marginBottom: "1rem", maxWidth: "320px" }}>
@@ -592,6 +626,51 @@ function PointsManagementPanel() {
         >
           {recalculating ? "Recalculating…" : `Update points — ${scopeLabel}`}
         </button>
+      </div>
+
+      <div
+        style={{
+          marginTop: "1.25rem",
+          paddingTop: "1rem",
+          borderTop: "1px solid rgba(239,68,68,0.2)",
+        }}
+      >
+        <p className="subtle" style={{ marginBottom: "0.6rem", fontSize: "0.82rem", color: "var(--error, #f87171)" }}>
+          Danger zone — Full DB reset wipes match_results and cannot be undone.
+        </p>
+        {confirmDbReset ? (
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+            <span className="subtle" style={{ fontSize: "0.82rem" }}>
+              Delete ALL match data for {scopeLabel}? This cannot be undone.
+            </span>
+            <button
+              className="button danger"
+              onClick={() => void handleDbReset()}
+              disabled={busy}
+              type="button"
+              style={{ fontSize: "0.82rem", padding: "0.35rem 0.8rem" }}
+            >
+              {dbResetting ? "Wiping…" : "Confirm full DB reset"}
+            </button>
+            <button
+              className="button ghost"
+              onClick={() => setConfirmDbReset(false)}
+              type="button"
+              style={{ fontSize: "0.82rem", padding: "0.35rem 0.8rem" }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            className="button danger"
+            onClick={() => setConfirmDbReset(true)}
+            disabled={busy}
+            type="button"
+          >
+            Full DB reset — {scopeLabel}
+          </button>
+        )}
       </div>
     </div>
   );

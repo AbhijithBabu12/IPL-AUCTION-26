@@ -12,6 +12,7 @@ import { PointsSyncPanel } from "@/components/room/points-sync-panel";
 import { CricsheetSyncButton } from "@/components/room/cricsheet-sync-button";
 import { WebscrapeSyncPanel } from "@/components/room/webscrape-sync-panel";
 import { CollapsibleSection } from "@/components/room/collapsible-section";
+import { MakeSuperRoomButton } from "@/components/room/make-super-room-button";
 import { SelfCreateTeamForm } from "@/components/room/self-create-team-form";
 import { TradePanel } from "@/components/trades/trade-panel";
 import { DashboardAutoRefresher } from "@/components/dashboard-auto-refresher";
@@ -298,6 +299,21 @@ export default async function RoomPage({
         </section>
       )}
 
+
+      {/* ── Make Super Room: shown to room admins on non-super rooms only ── */}
+      {snapshot.currentMember.isAdmin && !snapshot.room.isSuperRoom && (
+        <section
+          className="panel"
+          style={{ marginTop: "1rem", borderColor: "rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.03)" }}
+        >
+          <h2 style={{ marginTop: 0, marginBottom: "0.4rem", fontSize: "1rem" }}>Super Room</h2>
+          <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
+            Convert this room to a super room to unlock Cricsheet Sync, Live Score Sync, and DB-level
+            reset. Super rooms are excluded from global score pushes and are hidden from the lobby.
+          </p>
+          <MakeSuperRoomButton roomCode={snapshot.room.code} />
+        </section>
+      )}
 
       {snapshot.currentMember.isAdmin && snapshot.teams.length > 0 ? (
         <div style={{ marginTop: "1rem" }}>

@@ -9,49 +9,18 @@ type Mode = "idle" | "confirm" | "ready_to_fetch" | "done";
 
 interface ResultsResetButtonProps {
   roomCode: string;
-  /** Super room (and super admin) gets a DB-level reset that also wipes match_results.
-   *  Normal rooms get a soft reset that keeps match_results so Update Scores can rebuild. */
-  isSuperRoom?: boolean;
 }
 
-export function ResultsResetButton({ roomCode, isSuperRoom = false }: ResultsResetButtonProps) {
+export function ResultsResetButton({ roomCode }: ResultsResetButtonProps) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("idle");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // ── DB-level reset (super room / super admin) ────────────────────────────────
-  // Zeroes all player stats AND deletes all match_results rows.
-  // No rebuild step — user must re-sync from Cricsheet / Live Score after this.
-  async function handleDbReset() {
-    setPending(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await fetch(`/api/rooms/${roomCode}/results/reset`, { method: "POST" });
-      const data = (await res.json()) as {
-        ok?: boolean; error?: string;
-        playersReset?: number; syncRowsCleared?: number;
-      };
-      if (!res.ok || !data.ok) throw new Error(data.error ?? "Reset failed.");
-      setMessage(
-        `Reset ${data.playersReset ?? 0} players · cleared ${data.syncRowsCleared ?? 0} match rows. Re-sync data to rebuild.`,
-      );
-      setMode("done");
-      router.refresh();
-    } catch (err) {
-      setError(toErrorMessage(err));
-      setMode("idle");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  // ── Soft reset (normal rooms) ────────────────────────────────────────────────
-  // Zeroes player stats only. match_results are preserved so Update Scores can
-  // immediately rebuild from them without re-fetching.
-  async function handleSoftReset() {
+  // Soft reset: zeroes player stats, preserves match_results so Update Scores
+  // can rebuild immediately without re-fetching data.
+  async function handleReset() {
     setPending(true);
     setError(null);
     setMessage(null);
@@ -89,15 +58,10 @@ export function ResultsResetButton({ roomCode, isSuperRoom = false }: ResultsRes
     }
   }
 
-  const confirmDescription = isSuperRoom
-    ? "Zeroes all player fantasy points AND deletes all stored match data. You will need to re-sync from Cricsheet or Live Score to rebuild."
-    : "Zeroes all player fantasy points. Stored match data is kept — click Update Scores right after to rebuild everything from the existing data.";
-
   return (
     <>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.45rem" }}>
         {mode === "ready_to_fetch" ? (
-          // Soft-reset done → show Update Scores (normal rooms only)
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
               className="button"
@@ -118,7 +82,7 @@ export function ResultsResetButton({ roomCode, isSuperRoom = false }: ResultsRes
           </div>
         ) : (
           <button
-            className={`button ${isSuperRoom ? "danger" : "ghost"}`}
+            className="button ghost"
             disabled={pending}
             onClick={() => { setError(null); setMessage(null); setMode("confirm"); }}
             type="button"
@@ -143,12 +107,11 @@ export function ResultsResetButton({ roomCode, isSuperRoom = false }: ResultsRes
             aria-modal="true"
           >
             <div className="app-modal-head">
-              <h3 style={{ margin: 0 }}>
-                {isSuperRoom ? "Full DB reset" : "Reset room points"}
-              </h3>
+              <h3 style={{ margin: 0 }}>Reset room points</h3>
             </div>
             <p className="subtle" style={{ margin: 0, lineHeight: 1.6 }}>
-              {confirmDescription}
+              Zeroes all player fantasy points. Stored match data is kept — click{" "}
+              <strong>Update Scores</strong> right after to rebuild everything from the existing data.
             </p>
             <div className="app-modal-actions">
               <button
@@ -162,7 +125,7 @@ export function ResultsResetButton({ roomCode, isSuperRoom = false }: ResultsRes
               <button
                 className="button danger"
                 disabled={pending}
-                onClick={() => void (isSuperRoom ? handleDbReset() : handleSoftReset())}
+                onClick={() => void handleReset()}
                 type="button"
               >
                 {pending ? "Resetting…" : "Confirm reset"}

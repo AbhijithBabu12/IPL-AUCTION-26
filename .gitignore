@@ -56,3 +56,6 @@ IMPLEMENTATION.md
 CLAUDE.md
 XYZ.md
 changes.md
+scripts/simulate-reset-points.mjs
+scripts/restore-points.mjs
+scripts/investigate-points.mjs
