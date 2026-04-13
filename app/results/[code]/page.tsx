@@ -60,7 +60,7 @@ export default async function ResultsPage({
         </div>
         <div className="link-row">
           {snapshot.currentMember?.isAdmin ? (
-            <ResultsResetButton roomCode={snapshot.room.code} />
+            <ResultsResetButton roomCode={snapshot.room.code} isSuperRoom={snapshot.room.isSuperRoom} />
           ) : null}
           <Link className="button ghost" href={`/room/${snapshot.room.code}`}>
             Room
