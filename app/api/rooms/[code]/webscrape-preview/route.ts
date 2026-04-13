@@ -122,11 +122,6 @@ export async function GET(
     const { code } = await context.params;
     const authUser = await requireApiUser();
     const { room } = await requireRoomAdmin(code, authUser.id);
-
-    if (!room.isSuperRoom) {
-      throw new AppError("Live score sync is only available in the super room.", 403, "SUPER_ROOM_ONLY");
-    }
-
     const admin = getSupabaseAdminClient();
     const { searchParams } = new URL(request.url);
     const season = searchParams.get("season") ?? "2026";
@@ -159,11 +154,6 @@ export async function POST(
     const { code } = await context.params;
     const authUser = await requireApiUser();
     const { room } = await requireRoomAdmin(code, authUser.id);
-
-    if (!room.isSuperRoom) {
-      throw new AppError("Live score sync is only available in the super room.", 403, "SUPER_ROOM_ONLY");
-    }
-
     const admin = getSupabaseAdminClient();
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const season = String(body.season ?? "2026");
@@ -211,7 +201,7 @@ export async function POST(
       }, { status: 404 });
     }
 
-    // Skip matches already accepted in this room
+    // Find matches already stored (accepted or not) to avoid overwriting accepted ones
     const { data: existingRows } = await admin
       .from("match_results")
       .select("match_id, source, accepted")
@@ -222,6 +212,7 @@ export async function POST(
       (existingRows ?? []).filter((r) => r.accepted).map((r) => `${String(r.match_id)}::${String(r.source)}`),
     );
 
+    // Only skip upsert for already-accepted rows (preserve accepted state), but still include them in the comparison
     const newMatches = matches.filter((m) => !acceptedKeys.has(`${m.matchId}::${m.source}`));
     const skippedAccepted = matches.length - newMatches.length;
 

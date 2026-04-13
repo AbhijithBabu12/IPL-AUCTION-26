@@ -60,6 +60,10 @@ export function CricsheetSyncButton({ roomCode }: { roomCode: string }) {
       if (!response.ok) throw new Error(payload.error ?? "Sync failed.");
 
       setResult(payload);
+      // Signal the Live Score Sync drawer to open so the user can see the synced data
+      if (payload.ok) {
+        window.dispatchEvent(new CustomEvent("open-live-score-sync"));
+      }
     } catch (err) {
       setError(toErrorMessage(err));
     } finally {

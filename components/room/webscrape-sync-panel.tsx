@@ -47,20 +47,28 @@ function topScorers(pts: Record<string, number>, n = 5): Array<[string, number]>
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Component Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
+interface WebscrapeSyncPanelProps {
+  roomCode: string;
+  /** Pre-populated from the server so providers render without a network round-trip. */
+  initialProviders?: Array<{ id: string; label: string; configured: boolean }>;
+}
+
+export function WebscrapeSyncPanel({ roomCode, initialProviders = [] }: WebscrapeSyncPanelProps) {
   const router = useRouter();
   const [season, setSeason] = useState("2026");
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const firstConfigured = initialProviders.find((p) => p.configured);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(firstConfigured?.id ?? null);
   const [fetching, setFetching] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null); // matchId being accepted
   const [comparison, setComparison] = useState<MatchComparison[]>([]);
-  const [providers, setProviders] = useState<Array<{ id: string; label: string; configured: boolean }>>([]);
+  const [providers, setProviders] = useState<Array<{ id: string; label: string; configured: boolean }>>(initialProviders);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<string | null>(null);
   // Manual override state: matchId Ã¢â€ â€™ { playerName Ã¢â€ â€™ pts override }
   const [overrides, setOverrides] = useState<Record<string, Record<string, string>>>({});
   const [overrideEdit, setOverrideEdit] = useState<string | null>(null); // matchId with open editor
+  const [unaccepting, setUnaccepting] = useState<string | null>(null); // matchId being unaccepted
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [nextRefreshIn, setNextRefreshIn] = useState(0);
   const [skippedAccepted, setSkippedAccepted] = useState(0);
@@ -120,12 +128,11 @@ export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
     void loadStored();
   }, [roomCode, season]);
 
+  // Keep selected provider in sync if providers list updates after a fetch
   useEffect(() => {
     if (selectedProvider) return;
-    const firstConfigured = providers.find((provider) => provider.configured);
-    if (firstConfigured) {
-      setSelectedProvider(firstConfigured.id);
-    }
+    const first = providers.find((p) => p.configured);
+    if (first) setSelectedProvider(first.id);
   }, [providers, selectedProvider]);
 
   // Auto-refresh: 10-minute countdown + trigger
@@ -176,6 +183,36 @@ export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
       alert(toErrorMessage(err));
     } finally {
       setAccepting(null);
+    }
+  }
+
+  async function handleUnaccept(matchId: string) {
+    setUnaccepting(matchId);
+    try {
+      const res = await fetch(`/api/rooms/${roomCode}/webscrape-accept`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ season, unaccepts: [{ matchId }] }),
+      });
+      const data = (await res.json()) as { ok: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Undo failed.");
+
+      // Optimistically clear accepted state for all sources of this match
+      setComparison((prev) =>
+        prev.map((m) => {
+          if (m.matchId !== matchId) return m;
+          const newSources = { ...m.sources };
+          for (const k of Object.keys(newSources)) {
+            newSources[k] = { ...newSources[k]!, accepted: false };
+          }
+          return { ...m, sources: newSources };
+        }),
+      );
+      router.refresh();
+    } catch (err) {
+      alert(toErrorMessage(err));
+    } finally {
+      setUnaccepting(null);
     }
   }
 
@@ -351,10 +388,10 @@ export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
         </div>
       )}
 
-      {/* Already-accepted skip notice */}
+      {/* Already-accepted notice */}
       {skippedAccepted > 0 && (
         <div className="notice subtle" style={{ fontSize: "0.82rem" }}>
-          {skippedAccepted} match{skippedAccepted !== 1 ? "es" : ""} already accepted — skipped. Only new matches are shown below.
+          {skippedAccepted} match{skippedAccepted !== 1 ? "es" : ""} already accepted — shown below. Click any source card to switch.
         </div>
       )}
 
@@ -376,7 +413,7 @@ export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
 
       {comparison.map((match) => {
         const sourceKeys = Object.keys(match.sources);
-        const isProcessing = accepting === match.matchId;
+        const isProcessing = accepting === match.matchId || unaccepting === match.matchId;
         const acceptedSource = sourceKeys.find((k) => match.sources[k]?.accepted);
         const isOverrideOpen = overrideEdit === match.matchId;
 
@@ -401,6 +438,18 @@ export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
                   Accepted: {match.sources[acceptedSource]?.sourceLabel ?? acceptedSource}
                 </span>
               )}
+              {acceptedSource && (
+                <button
+                  className="button ghost"
+                  disabled={isProcessing}
+                  onClick={() => void handleUnaccept(match.matchId)}
+                  style={{ fontSize: "0.78rem", padding: "0.2rem 0.55rem", color: "var(--error, #f87171)" }}
+                  type="button"
+                  title="Remove accepted status — scores will not count until a source is re-accepted"
+                >
+                  {unaccepting === match.matchId ? "Undoing…" : "Undo"}
+                </button>
+              )}
               <button
                 className="btn-sm ghost"
                 onClick={() => setOverrideEdit(isOverrideOpen ? null : match.matchId)}
@@ -410,6 +459,23 @@ export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
                 {isOverrideOpen ? "Close editor" : "Manual edit"}
               </button>
             </div>
+
+            {/* Multi-source prompt */}
+            {sourceKeys.length > 1 && (
+              <div
+                style={{
+                  background: "rgba(99,102,241,0.08)",
+                  border: "1px solid rgba(99,102,241,0.2)",
+                  borderRadius: "6px",
+                  padding: "0.45rem 0.75rem",
+                  fontSize: "0.81rem",
+                }}
+              >
+                {acceptedSource
+                  ? "Multiple sources available — click another source to switch."
+                  : "Multiple sources available — compare and choose one to use for scoring."}
+              </div>
+            )}
 
             {/* Source comparison columns */}
             <div
@@ -478,18 +544,23 @@ export function WebscrapeSyncPanel({ roomCode }: { roomCode: string }) {
 
                     <button
                       className={`button ${isAccepted ? "" : "ghost"}`}
-                      disabled={isProcessing || isAccepted}
+                      disabled={isProcessing}
                       onClick={() => void handleAccept(match.matchId, srcKey)}
                       style={{
                         width: "100%",
                         fontSize: "0.82rem",
                         padding: "0.45rem",
-                        cursor: isAccepted ? "default" : undefined,
-                        opacity: isAccepted ? 0.92 : 1,
                       }}
                       type="button"
+                      title={isAccepted ? "Click to re-accept (no change)" : "Accept this source and unaccept others"}
                     >
-                      {isAccepted ? "Accepted" : isProcessing ? "Accepting..." : "Accept this source"}
+                      {isProcessing && accepting === match.matchId
+                        ? "Accepting..."
+                        : isAccepted
+                        ? "Accepted ✓"
+                        : sourceKeys.length > 1
+                        ? "Use this source"
+                        : "Accept"}
                     </button>
                   </div>
                 );

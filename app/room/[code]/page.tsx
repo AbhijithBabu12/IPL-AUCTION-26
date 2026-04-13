@@ -10,9 +10,8 @@ import { StartAuctionButton } from "@/components/room/start-auction-button";
 import { TeamOwnershipPanel } from "@/components/room/team-ownership-panel";
 import { PointsSyncPanel } from "@/components/room/points-sync-panel";
 import { CricsheetSyncButton } from "@/components/room/cricsheet-sync-button";
-import { WebscrapeSyncPanel } from "@/components/room/webscrape-sync-panel";
+import { LiveScoreSyncDrawer } from "@/components/room/live-score-sync-drawer";
 import { CollapsibleSection } from "@/components/room/collapsible-section";
-import { MakeSuperRoomButton } from "@/components/room/make-super-room-button";
 import { SelfCreateTeamForm } from "@/components/room/self-create-team-form";
 import { TradePanel } from "@/components/trades/trade-panel";
 import { DashboardAutoRefresher } from "@/components/dashboard-auto-refresher";
@@ -21,6 +20,7 @@ import { SoldPlayerShowcase } from "@/components/sold-player-showcase";
 import { hasServiceRoleEnv } from "@/lib/config";
 import { requireSessionUser } from "@/lib/server/auth";
 import { getRoomSnapshot } from "@/lib/server/queries";
+import { availableProviders } from "@/lib/server/webscrape/index";
 import { deriveRoleLabel, formatCurrency, formatCurrencyShort } from "@/lib/utils";
 
 export default async function RoomPage({
@@ -300,20 +300,6 @@ export default async function RoomPage({
       )}
 
 
-      {/* ── Make Super Room: shown to room admins on non-super rooms only ── */}
-      {snapshot.currentMember.isAdmin && !snapshot.room.isSuperRoom && (
-        <section
-          className="panel"
-          style={{ marginTop: "1rem", borderColor: "rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.03)" }}
-        >
-          <h2 style={{ marginTop: 0, marginBottom: "0.4rem", fontSize: "1rem" }}>Super Room</h2>
-          <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
-            Convert this room to a super room to unlock Cricsheet Sync, Live Score Sync, and DB-level
-            reset. Super rooms are excluded from global score pushes and are hidden from the lobby.
-          </p>
-          <MakeSuperRoomButton roomCode={snapshot.room.code} />
-        </section>
-      )}
 
       {snapshot.currentMember.isAdmin && snapshot.teams.length > 0 ? (
         <div style={{ marginTop: "1rem" }}>
@@ -330,9 +316,9 @@ export default async function RoomPage({
         </div>
       ) : null}
 
-      {/* ── Score Sync: available to all room admins ── */}
+      {/* ── Score Sync + Live Score Sync: all room admins ── */}
       {snapshot.currentMember.isAdmin ? (
-        <div style={{ marginTop: "1rem" }}>
+        <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <CollapsibleSection
             title="Score Sync"
             eyebrow="Points management"
@@ -343,34 +329,18 @@ export default async function RoomPage({
             </p>
             <PointsSyncPanel roomCode={snapshot.room.code} />
           </CollapsibleSection>
-        </div>
-      ) : null}
 
-      {/* ── Super-room only: Cricsheet + Live Score data sources ── */}
-      {snapshot.currentMember.isAdmin && snapshot.room.isSuperRoom ? (
-        <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <LiveScoreSyncDrawer roomCode={snapshot.room.code} initialProviders={availableProviders()} />
+
           <CollapsibleSection
             title="Cricsheet Sync"
             eyebrow="Ball-by-ball data"
-            badge="Sandbox only"
             accentColor="rgba(56,189,248,0.25)"
           >
             <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
               Download the IPL season from Cricsheet and sync player stats into this room.
             </p>
             <CricsheetSyncButton roomCode={snapshot.room.code} />
-          </CollapsibleSection>
-
-          <CollapsibleSection
-            title="Live Score Sync"
-            eyebrow="Live API data"
-            badge="Sandbox only"
-            accentColor="rgba(99,220,120,0.25)"
-          >
-            <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
-              Fetch live match scores from API providers, compare sources, and accept the one you trust for each match.
-            </p>
-            <WebscrapeSyncPanel roomCode={snapshot.room.code} />
           </CollapsibleSection>
         </div>
       ) : null}

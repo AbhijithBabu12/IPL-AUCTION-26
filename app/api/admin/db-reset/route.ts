@@ -41,8 +41,7 @@ export async function POST(request: Request) {
     } else {
       const { data, error } = await admin
         .from("rooms")
-        .select("id, code")
-        .eq("is_super_room", false);
+        .select("id, code");
       if (error) throw new AppError(error.message, 500, "DB_QUERY_FAILED");
       rooms = data ?? [];
     }

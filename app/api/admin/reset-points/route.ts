@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       if (!room) throw new AppError(`Room not found: ${roomCode}`, 404, "NOT_FOUND");
       rooms = [room];
     } else {
-      const { data, error } = await admin.from("rooms").select("id, code").eq("is_super_room", false);
+      const { data, error } = await admin.from("rooms").select("id, code");
       if (error) throw new AppError(error.message, 500, "DB_QUERY_FAILED");
       rooms = data ?? [];
     }

@@ -74,10 +74,6 @@ export async function POST(
     const authUser = await requireApiUser();
     const { room } = await requireRoomAdmin(code, authUser.id);
 
-    if (!room.isSuperRoom) {
-      throw new AppError("Cricsheet sync is only available in the super room.", 403, "SUPER_ROOM_ONLY");
-    }
-
     const admin = getSupabaseAdminClient();
     let fileBuffer: Buffer;
     let season: string;

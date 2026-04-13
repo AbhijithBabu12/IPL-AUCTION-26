@@ -27,16 +27,12 @@ export async function POST(
     const { code } = await context.params;
     const authUser = await requireApiUser();
     const { room } = await requireRoomAdmin(code, authUser.id);
-
-    if (!room.isSuperRoom) {
-      throw new AppError("Live score accept is only available in the super room.", 403, "SUPER_ROOM_ONLY");
-    }
-
     const admin = getSupabaseAdminClient();
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
     const accepts = Array.isArray(body.accepts) ? body.accepts as Array<{ matchId: string; source: string }> : [];
-    if (accepts.length === 0) throw new AppError("accepts array is required.", 400, "NO_DATA");
+    const unaccepts = Array.isArray(body.unaccepts) ? body.unaccepts as Array<{ matchId: string }> : [];
+    if (accepts.length === 0 && unaccepts.length === 0) throw new AppError("accepts or unaccepts array is required.", 400, "NO_DATA");
 
     for (const { matchId, source } of accepts) {
       if (!matchId || !source) continue;
@@ -58,6 +54,17 @@ export async function POST(
         .eq("room_id", room.id)
         .eq("match_id", matchId)
         .neq("source", source);
+    }
+
+    // Unaccept all sources for the given matchIds (undo accept)
+    for (const { matchId } of unaccepts) {
+      if (!matchId) continue;
+      const { error: unacceptError } = await admin
+        .from("match_results")
+        .update({ accepted: false, accepted_at: null })
+        .eq("room_id", room.id)
+        .eq("match_id", matchId);
+      if (unacceptError) throw new AppError(unacceptError.message, 500, "DB_QUERY_FAILED");
     }
 
     const { playersUpdated } = await recalculateRoomStats(room.id, room.code);

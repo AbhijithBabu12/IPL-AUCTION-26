@@ -27,7 +27,6 @@ export async function POST() {
     const { data: roomRows, error: roomsError } = await admin
       .from("rooms")
       .select("id, code, name, purse, squad_size, timer_seconds, bid_increment, owner_id, created_at")
-      .eq("is_super_room", false)
       .order("created_at");
     if (roomsError) throw new AppError(roomsError.message, 500, "DB_QUERY_FAILED");
 
@@ -41,7 +40,6 @@ export async function POST() {
       bidIncrement: Number(r.bid_increment),
       ownerId: String(r.owner_id ?? ""),
       createdAt: String(r.created_at ?? ""),
-      isSuperRoom: false,
     }));
 
     let totalImported = 0;

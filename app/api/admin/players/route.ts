@@ -23,8 +23,7 @@ async function fetchAllRooms(): Promise<Room[]> {
   const admin = getSupabaseAdminClient();
   const { data, error } = await admin
     .from("rooms")
-    .select("id, code, name, purse, squad_size, timer_seconds, bid_increment, owner_id, created_at, is_super_room")
-    .eq("is_super_room", false) // super room is excluded from all global ops
+    .select("id, code, name, purse, squad_size, timer_seconds, bid_increment, owner_id, created_at")
     .order("created_at");
   if (error) throw new AppError(error.message, 500, "DB_QUERY_FAILED");
   return (data ?? []).map((r) => ({
@@ -37,7 +36,6 @@ async function fetchAllRooms(): Promise<Room[]> {
     bidIncrement: Number(r.bid_increment),
     ownerId: String(r.owner_id ?? ""),
     createdAt: String(r.created_at ?? ""),
-    isSuperRoom: false,
   }));
 }
 

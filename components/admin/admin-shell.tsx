@@ -430,11 +430,9 @@ function PointsManagementPanel() {
   const [selectedRoomCode, setSelectedRoomCode] = useState<string>("all");
   const [resetting, setResetting] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
-  const [dbResetting, setDbResetting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [confirmDbReset, setConfirmDbReset] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -508,36 +506,7 @@ function PointsManagementPanel() {
     }
   }
 
-  async function handleDbReset() {
-    setDbResetting(true);
-    setConfirmDbReset(false);
-    setMessage(null);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/db-reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(scope ? { roomCode: scope } : {}),
-      });
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        roomsReset?: number;
-        playersReset?: number;
-        matchRowsDeleted?: number;
-      };
-      if (!res.ok || !data.ok) throw new Error(data.error ?? "DB reset failed.");
-      setMessage(
-        `Full DB reset: ${data.playersReset ?? 0} players zeroed, ${data.matchRowsDeleted ?? 0} match rows deleted across ${data.roomsReset ?? 0} rooms.`,
-      );
-    } catch (err) {
-      setError(toErrorMessage(err));
-    } finally {
-      setDbResetting(false);
-    }
-  }
-
-  const busy = resetting || recalculating || dbResetting;
+  const busy = resetting || recalculating;
 
   return (
     <div
@@ -550,8 +519,6 @@ function PointsManagementPanel() {
         <strong>Reset points</strong> zeroes player stats but keeps match data — follow with Update Points to rebuild.
         <br />
         <strong>Update points</strong> rebuilds from all accepted match results.
-        <br />
-        <strong>Full DB reset</strong> zeroes stats AND deletes all match rows — requires a fresh sync afterwards.
       </p>
 
       <div className="field" style={{ marginBottom: "1rem", maxWidth: "320px" }}>
@@ -628,50 +595,6 @@ function PointsManagementPanel() {
         </button>
       </div>
 
-      <div
-        style={{
-          marginTop: "1.25rem",
-          paddingTop: "1rem",
-          borderTop: "1px solid rgba(239,68,68,0.2)",
-        }}
-      >
-        <p className="subtle" style={{ marginBottom: "0.6rem", fontSize: "0.82rem", color: "var(--error, #f87171)" }}>
-          Danger zone — Full DB reset wipes match_results and cannot be undone.
-        </p>
-        {confirmDbReset ? (
-          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-            <span className="subtle" style={{ fontSize: "0.82rem" }}>
-              Delete ALL match data for {scopeLabel}? This cannot be undone.
-            </span>
-            <button
-              className="button danger"
-              onClick={() => void handleDbReset()}
-              disabled={busy}
-              type="button"
-              style={{ fontSize: "0.82rem", padding: "0.35rem 0.8rem" }}
-            >
-              {dbResetting ? "Wiping…" : "Confirm full DB reset"}
-            </button>
-            <button
-              className="button ghost"
-              onClick={() => setConfirmDbReset(false)}
-              type="button"
-              style={{ fontSize: "0.82rem", padding: "0.35rem 0.8rem" }}
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            className="button danger"
-            onClick={() => setConfirmDbReset(true)}
-            disabled={busy}
-            type="button"
-          >
-            Full DB reset — {scopeLabel}
-          </button>
-        )}
-      </div>
     </div>
   );
 }
@@ -1269,134 +1192,6 @@ function ScoreCorrectionTab() {
   );
 }
 
-// ── Tab: Super Room ───────────────────────────────────────────────────────────
-
-interface SuperRoomInfo {
-  id: string;
-  code: string;
-  name: string;
-}
-
-function SuperRoomTab() {
-  const [superRoom, setSuperRoom] = useState<SuperRoomInfo | null | undefined>(undefined);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/admin/super-room");
-        const data = (await res.json()) as { ok: boolean; superRoom?: SuperRoomInfo | null };
-        if (data.ok) setSuperRoom(data.superRoom ?? null);
-      } catch { /* ignore */ } finally {
-        setLoading(false);
-      }
-    }
-    void load();
-  }, []);
-
-  async function handleCreate() {
-    setCreating(true);
-    setMessage(null);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/super-room", { method: "POST" });
-      const data = (await res.json()) as { ok: boolean; superRoom?: SuperRoomInfo; created?: boolean; error?: string; detail?: string; code?: string };
-      if (!res.ok || !data.ok) {
-        // Show the technical detail for superadmins — most likely a missing migration
-        const msg = data.detail ?? data.error ?? "Failed.";
-        throw new Error(msg);
-      }
-      setSuperRoom(data.superRoom ?? null);
-      setMessage(data.created ? "Super room created." : "Super room already exists — you have been added as admin.");
-    } catch (err) {
-      setError(toErrorMessage(err));
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  if (loading) return <p className="subtle">Loading…</p>;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div className="panel" style={{ borderColor: "rgba(251,113,133,0.2)", background: "rgba(251,113,133,0.03)" }}>
-        <span className="eyebrow">Isolated sandbox</span>
-        <h2 style={{ marginTop: "0.4rem", marginBottom: "0.5rem" }}>Super Room</h2>
-        <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
-          A private room only accessible to superadmins. Changes here do not affect any other room.
-          It is hidden from all lobbies, excluded from global score pushes, and excluded from global player syncs.
-          Use it to test scoring rules, auction flow, or player data without risk.
-        </p>
-
-        {message && <div className="notice success" style={{ marginBottom: "0.75rem" }}>{message}</div>}
-        {error && <div className="notice warning" style={{ marginBottom: "0.75rem" }}>{error}</div>}
-
-        {superRoom ? (
-          <div>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", marginBottom: "1rem" }}>
-              <span className="pill highlight" style={{ fontSize: "0.78rem" }}>Active</span>
-              <code style={{ fontSize: "0.85rem" }}>{superRoom.code}</code>
-              <span className="subtle" style={{ fontSize: "0.85rem" }}>{superRoom.name}</span>
-            </div>
-            <div style={{ display: "flex", gap: "0.65rem", flexWrap: "wrap" }}>
-              <a
-                href={`/room/${superRoom.code}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="button ghost"
-                style={{ fontSize: "0.85rem" }}
-              >
-                Room Setup
-              </a>
-              <a
-                href={`/auction/${superRoom.code}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="button ghost"
-                style={{ fontSize: "0.85rem" }}
-              >
-                Auction
-              </a>
-              <a
-                href={`/results/${superRoom.code}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="button ghost"
-                style={{ fontSize: "0.85rem" }}
-              >
-                Results
-              </a>
-            </div>
-          </div>
-        ) : (
-          <button
-            className="button"
-            onClick={() => void handleCreate()}
-            disabled={creating}
-            type="button"
-          >
-            {creating ? "Creating…" : "Create Super Room"}
-          </button>
-        )}
-      </div>
-
-      <div className="panel">
-        <h2 style={{ marginTop: 0, fontSize: "1rem" }}>Isolation guarantees</h2>
-        <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.85rem", color: "var(--subtle, #888)", lineHeight: 1.7 }}>
-          <li>Not visible in the lobby for any user, including superadmins</li>
-          <li>Excluded from global match score pushes (accept-match / accept-season)</li>
-          <li>Excluded from global player pool uploads and the default pool load</li>
-          <li>Excluded from admin-panel reset and recalculate operations scoped to "all rooms"</li>
-          <li>Only accessible by navigating directly to the room/auction/results URLs</li>
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 // ── Tab: Superadmin Management ────────────────────────────────────────────────
 
 function SuperadminTab() {
@@ -1486,9 +1281,255 @@ SELECT id, email, display_name FROM public.users WHERE is_superadmin = true;`}
   );
 }
 
+// ── Settings Tab ─────────────────────────────────────────────────────────────
+
+// ── Danger Zone panel (used inside SettingsTab) ───────────────────────────────
+
+function DangerZonePanel() {
+  const [rooms, setRooms] = useState<RoomRow[]>([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+  const [selectedRoomCode, setSelectedRoomCode] = useState<string>("all");
+  const [dbResetting, setDbResetting] = useState(false);
+  const [confirmDbReset, setConfirmDbReset] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/admin/rooms");
+        const data = (await res.json()) as { ok: boolean; rooms?: RoomRow[] };
+        if (data.ok) setRooms(data.rooms ?? []);
+      } catch { /* ignore */ } finally {
+        setLoadingRooms(false);
+      }
+    }
+    void load();
+  }, []);
+
+  const scope = selectedRoomCode === "all" ? null : selectedRoomCode;
+  const scopeLabel =
+    selectedRoomCode === "all"
+      ? "all rooms"
+      : (rooms.find((r) => r.code === selectedRoomCode)?.name ?? selectedRoomCode);
+
+  async function handleDbReset() {
+    setDbResetting(true);
+    setConfirmDbReset(false);
+    setMessage(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/db-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(scope ? { roomCode: scope } : {}),
+      });
+      const data = (await res.json()) as {
+        ok: boolean; error?: string;
+        roomsReset?: number; playersReset?: number; matchRowsDeleted?: number;
+      };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "DB reset failed.");
+      setMessage(
+        `Done: ${data.playersReset ?? 0} players zeroed, ${data.matchRowsDeleted ?? 0} match rows deleted across ${data.roomsReset ?? 0} rooms.`,
+      );
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setDbResetting(false);
+    }
+  }
+
+  return (
+    <div
+      className="panel"
+      style={{ borderColor: "rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.04)" }}
+    >
+      <span className="eyebrow" style={{ color: "var(--error, #f87171)" }}>Danger Zone</span>
+      <h2 style={{ marginTop: "0.4rem", marginBottom: "0.5rem" }}>Full DB Reset</h2>
+      <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
+        Zeroes all player stats AND deletes all match rows for the selected scope.
+        Requires a fresh sync afterwards.{" "}
+        <strong style={{ color: "var(--error, #f87171)" }}>Cannot be undone.</strong>
+      </p>
+
+      <div className="field" style={{ marginBottom: "1rem", maxWidth: "320px" }}>
+        <label>Scope</label>
+        <select
+          className="select"
+          value={selectedRoomCode}
+          onChange={(e) => { setSelectedRoomCode(e.target.value); setMessage(null); setError(null); }}
+          disabled={loadingRooms || dbResetting}
+        >
+          <option value="all">All rooms</option>
+          {rooms.map((r) => (
+            <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
+          ))}
+        </select>
+      </div>
+
+      {message && <div className="notice success" style={{ marginBottom: "0.75rem" }}>{message}</div>}
+      {error   && <div className="notice warning" style={{ marginBottom: "0.75rem" }}>{error}</div>}
+
+      {confirmDbReset ? (
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
+          <span className="subtle" style={{ fontSize: "0.82rem" }}>
+            Delete ALL match data for {scopeLabel}? This cannot be undone.
+          </span>
+          <button
+            className="button danger"
+            onClick={() => void handleDbReset()}
+            disabled={dbResetting}
+            type="button"
+            style={{ fontSize: "0.82rem", padding: "0.35rem 0.8rem" }}
+          >
+            {dbResetting ? "Wiping…" : "Confirm full DB reset"}
+          </button>
+          <button
+            className="button ghost"
+            onClick={() => setConfirmDbReset(false)}
+            type="button"
+            style={{ fontSize: "0.82rem", padding: "0.35rem 0.8rem" }}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          className="button danger"
+          onClick={() => setConfirmDbReset(true)}
+          disabled={dbResetting}
+          type="button"
+        >
+          Full DB reset — {scopeLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SettingsTab() {
+  const [flags, setFlags] = useState<{ user_score_fetch: boolean } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/admin/settings");
+        const data = (await res.json()) as { ok: boolean; flags?: { user_score_fetch: boolean } };
+        if (data.ok && data.flags) setFlags(data.flags);
+      } catch { /* ignore */ } finally {
+        setLoading(false);
+      }
+    }
+    void load();
+  }, []);
+
+  async function toggle(flag: "user_score_fetch", value: boolean) {
+    setSaving(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [flag]: value }),
+      });
+      const data = (await res.json()) as { ok: boolean; flags?: typeof flags; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Save failed.");
+      if (data.flags) setFlags(data.flags);
+      setMessage("Settings saved.");
+    } catch (err) {
+      setError(toErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <div className="subtle" style={{ padding: "2rem" }}>Loading settings…</div>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div
+        className="panel"
+        style={{ borderColor: "rgba(99,102,241,0.2)", background: "rgba(99,102,241,0.03)" }}
+      >
+        <span className="eyebrow">Feature Flags</span>
+        <h2 style={{ marginTop: "0.4rem", marginBottom: "0.5rem" }}>User Permissions</h2>
+        <p className="subtle" style={{ marginBottom: "1.25rem", fontSize: "0.88rem" }}>
+          Control which features are accessible to regular room members.
+        </p>
+
+        {message && <div className="notice success" style={{ marginBottom: "0.75rem" }}>{message}</div>}
+        {error   && <div className="notice warning" style={{ marginBottom: "0.75rem" }}>{error}</div>}
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "1rem",
+            borderRadius: "8px",
+            border: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(255,255,255,0.02)",
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 600, fontSize: "0.95rem", marginBottom: "0.2rem" }}>
+              User Score Updates
+            </div>
+            <div className="subtle" style={{ fontSize: "0.82rem" }}>
+              When ON — all room members see "Update Scores" on the results page.
+              <br />
+              When OFF — hidden for regular members. Room admins always see it regardless.
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={saving || !flags}
+            onClick={() => flags && void toggle("user_score_fetch", !flags.user_score_fetch)}
+            style={{
+              marginLeft: "1.5rem",
+              flexShrink: 0,
+              width: "52px",
+              height: "28px",
+              borderRadius: "14px",
+              border: "none",
+              cursor: saving ? "not-allowed" : "pointer",
+              background: flags?.user_score_fetch ? "var(--accent, #7468ff)" : "rgba(255,255,255,0.12)",
+              position: "relative",
+              transition: "background 0.2s",
+              opacity: saving ? 0.6 : 1,
+            }}
+            aria-label={flags?.user_score_fetch ? "Disable user score updates" : "Enable user score updates"}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: "3px",
+                left: flags?.user_score_fetch ? "26px" : "3px",
+                width: "22px",
+                height: "22px",
+                borderRadius: "50%",
+                background: "#fff",
+                transition: "left 0.2s",
+                display: "block",
+              }}
+            />
+          </button>
+        </div>
+      </div>
+
+      <DangerZonePanel />
+    </div>
+  );
+}
+
 // ── Main shell ────────────────────────────────────────────────────────────────
 
-type Tab = "sync" | "rooms" | "players" | "points" | "correction" | "superroom" | "admins";
+type Tab = "sync" | "rooms" | "players" | "points" | "correction" | "admins" | "settings";
 
 export function AdminShell({ adminName }: { adminName: string }) {
   const [activeTab, setActiveTab] = useState<Tab>("sync");
@@ -1499,8 +1540,8 @@ export function AdminShell({ adminName }: { adminName: string }) {
     { id: "players", label: "Players & Teams" },
     { id: "points", label: "Players & Points" },
     { id: "correction", label: "Score Correction" },
-    { id: "superroom", label: "Super Room" },
     { id: "admins", label: "Superadmins" },
+    { id: "settings", label: "Settings" },
   ];
 
   return (
@@ -1552,8 +1593,8 @@ export function AdminShell({ adminName }: { adminName: string }) {
       {activeTab === "players" && <PlayersTeamsTab />}
       {activeTab === "points" && <PlayersPointsTab />}
       {activeTab === "correction" && <ScoreCorrectionTab />}
-      {activeTab === "superroom" && <SuperRoomTab />}
       {activeTab === "admins" && <SuperadminTab />}
+      {activeTab === "settings" && <SettingsTab />}
     </main>
   );
 }

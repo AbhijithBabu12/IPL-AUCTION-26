@@ -256,50 +256,52 @@ export async function recalculateRoomStats(
     .select("id, name, stats, cricsheet_uuid")
     .eq("room_id", roomId);
 
-  let matched = 0;
+  // Batch all player updates concurrently instead of serial
+  const matchCounts = await Promise.all(
+    (players ?? []).map(async (player) => {
+      const playerName = String(player.name);
+      const normKey = normalizeName(playerName);
+      const storedUuid = (player as { cricsheet_uuid?: string | null }).cricsheet_uuid;
+      const existing = (player.stats ?? {}) as Record<string, unknown>;
 
-  for (const player of players ?? []) {
-    const playerName = String(player.name);
-    const normKey = normalizeName(playerName);
-    const storedUuid = (player as { cricsheet_uuid?: string | null }).cricsheet_uuid;
-    const existing = (player.stats ?? {}) as Record<string, unknown>;
+      let statsKey: string | undefined;
+      let clearStoredUuid = false;
 
-    let statsKey: string | undefined;
-    let clearStoredUuid = false;
-
-    if (storedUuid) {
-      const fullName = CRICSHEET_UUID_MAP.get(storedUuid);
-      if (fullName && normalizeName(fullName) === normKey && aggregated[fullName]) {
-        statsKey = fullName;
-      } else if (fullName && normalizeName(fullName) !== normKey) {
-        clearStoredUuid = true;
+      if (storedUuid) {
+        const fullName = CRICSHEET_UUID_MAP.get(storedUuid);
+        if (fullName && normalizeName(fullName) === normKey && aggregated[fullName]) {
+          statsKey = fullName;
+        } else if (fullName && normalizeName(fullName) !== normKey) {
+          clearStoredUuid = true;
+        }
       }
-    }
 
-    if (!statsKey) statsKey = normToOriginal.get(normKey);
+      if (!statsKey) statsKey = normToOriginal.get(normKey);
 
-    if (!statsKey) {
-      const candidates = Array.from(normToOriginal.entries()).filter(
-        ([key]) => isShortNameFormat(key) && matchesShortName(key, normKey),
-      );
-      if (candidates.length === 1) statsKey = candidates[0]?.[1];
-    }
+      if (!statsKey) {
+        const candidates = Array.from(normToOriginal.entries()).filter(
+          ([key]) => isShortNameFormat(key) && matchesShortName(key, normKey),
+        );
+        if (candidates.length === 1) statsKey = candidates[0]?.[1];
+      }
 
-    const agg = statsKey ? aggregated[statsKey] : undefined;
-    const updatePayload: Record<string, unknown> = {
-      stats: buildSeasonStatsPayload(existing, agg),
-    };
+      const agg = statsKey ? aggregated[statsKey] : undefined;
+      const updatePayload: Record<string, unknown> = {
+        stats: buildSeasonStatsPayload(existing, agg),
+      };
 
-    if (statsKey) {
-      const resolvedUuid = fullNameToUuid.get(statsKey);
-      if (resolvedUuid && !storedUuid) updatePayload.cricsheet_uuid = resolvedUuid;
-    } else if (clearStoredUuid) {
-      updatePayload.cricsheet_uuid = null;
-    }
+      if (statsKey) {
+        const resolvedUuid = fullNameToUuid.get(statsKey);
+        if (resolvedUuid && !storedUuid) updatePayload.cricsheet_uuid = resolvedUuid;
+      } else if (clearStoredUuid) {
+        updatePayload.cricsheet_uuid = null;
+      }
 
-    await admin.from("players").update(updatePayload).eq("id", player.id as string);
-    if (statsKey) matched += 1;
-  }
+      await admin.from("players").update(updatePayload).eq("id", player.id as string);
+      return statsKey ? 1 : 0;
+    }),
+  );
+  const matched = matchCounts.reduce((s, v) => s + v, 0);
 
   await invalidateRoomCache(roomId, roomCode);
   revalidatePath(`/room/${roomCode}`);
@@ -329,11 +331,10 @@ export async function pushMatchToAllRooms(
     throw new Error(`Global match not found or not accepted: ${matchId}/${source}`);
   }
 
-  // 2. Get all rooms — skip the super room (sandbox, not part of live scoring)
+  // 2. Get all rooms
   const { data: rooms, error: roomsError } = await admin
     .from("rooms")
-    .select("id, code")
-    .eq("is_super_room", false);
+    .select("id, code");
 
   if (roomsError) throw new Error(roomsError.message);
 

@@ -4,9 +4,11 @@ import { SiteLogo } from "@/components/site-logo";
 import { ResultsBoard } from "@/components/results/results-board";
 import { ResultsExportBar } from "@/components/results/results-export-bar";
 import { ResultsResetButton } from "@/components/results/results-reset-button";
+import { UpdateScoresButton } from "@/components/results/update-scores-button";
 import { hasServiceRoleEnv } from "@/lib/config";
 import { requireSessionUser } from "@/lib/server/auth";
 import { getResultsSnapshot } from "@/lib/server/queries";
+import { getFeatureFlags } from "@/lib/server/settings";
 
 export default async function ResultsPage({
   params,
@@ -32,7 +34,10 @@ export default async function ResultsPage({
     );
   }
 
-  const snapshot = await getResultsSnapshot(code, user);
+  const [snapshot, flags] = await Promise.all([
+    getResultsSnapshot(code, user),
+    getFeatureFlags(),
+  ]);
 
   if (!snapshot) {
     return (
@@ -61,6 +66,11 @@ export default async function ResultsPage({
         <div className="link-row">
           {snapshot.currentMember?.isAdmin ? (
             <ResultsResetButton roomCode={snapshot.room.code} />
+          ) : null}
+          {/* Visible to all members when superadmin has the flag enabled,
+              or always to admins (they can use Reset Points for a full rebuild) */}
+          {(flags.user_score_fetch || snapshot.currentMember?.isAdmin) ? (
+            <UpdateScoresButton roomCode={snapshot.room.code} />
           ) : null}
           <Link className="button ghost" href={`/room/${snapshot.room.code}`}>
             Room
