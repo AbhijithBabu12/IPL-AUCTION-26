@@ -90,6 +90,33 @@ export async function signOutAction() {
   redirect("/login");
 }
 
+export async function resetPasswordAction(formData: FormData) {
+  if (!hasBrowserSupabaseEnv) {
+    redirect(buildLoginRedirect({ authError: "supabase_not_configured", next: "/lobby" }));
+  }
+
+  const email = getFormValue(formData, "email").trim().toLowerCase();
+
+  if (!email) {
+    redirect(buildLoginRedirect({ authError: "missing_credentials", next: "/lobby" }));
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${base}/auth/callback?next=/lobby`,
+  });
+
+  if (error) {
+    const code = error.message?.toLowerCase().includes("rate")
+      ? "reset_rate_limited"
+      : "reset_failed";
+    redirect(buildLoginRedirect({ authError: code, next: "/lobby" }));
+  }
+
+  redirect(buildLoginRedirect({ authNotice: "password_reset_sent", next: "/lobby" }));
+}
+
 export async function signUpWithPasswordAction(formData: FormData) {
   const next = sanitizeNextPath(getFormValue(formData, "next"));
 

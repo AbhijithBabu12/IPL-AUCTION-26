@@ -5,6 +5,7 @@ import { signOutAction } from "@/app/login/actions";
 import { CreateRoomForm } from "@/components/lobby/create-room-form";
 import { JoinRoomForm } from "@/components/lobby/join-room-form";
 import { RoomCardList } from "@/components/lobby/room-card-list";
+import { DrawerSection } from "@/components/room/drawer-section";
 import { hasBrowserSupabaseEnv, hasServiceRoleEnv } from "@/lib/config";
 import { requireSessionUser } from "@/lib/server/auth";
 import { getLobbySnapshot } from "@/lib/server/queries";
@@ -107,10 +108,21 @@ export default async function LobbyPage() {
         </div>
       </section>
 
-      <section className="panel" style={{ marginTop: "1rem" }}>
-        <h2>Your rooms</h2>
-        <RoomCardList rooms={snapshot.rooms} />
-      </section>
+      <div style={{ marginTop: "1rem" }}>
+        <DrawerSection
+          title="Your rooms"
+          eyebrow="Rooms"
+          defaultOpen={snapshot.rooms.length > 0}
+          badge={
+            snapshot.rooms.length > 0 ? (
+              <span className="pill">{snapshot.rooms.length} room{snapshot.rooms.length !== 1 ? "s" : ""}</span>
+            ) : null
+          }
+          accentColor="rgba(99,102,241,0.2)"
+        >
+          <RoomCardList rooms={snapshot.rooms} />
+        </DrawerSection>
+      </div>
     </main>
   );
 }

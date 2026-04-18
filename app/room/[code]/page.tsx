@@ -8,13 +8,10 @@ import { RoomInvitePanel } from "@/components/room/room-invite-panel";
 import { RoomAuctionExportButton } from "@/components/room/room-auction-export-button";
 import { StartAuctionButton } from "@/components/room/start-auction-button";
 import { TeamOwnershipPanel } from "@/components/room/team-ownership-panel";
-import { PointsSyncPanel } from "@/components/room/points-sync-panel";
-import { CricsheetSyncButton } from "@/components/room/cricsheet-sync-button";
-import { LiveScoreSyncDrawer } from "@/components/room/live-score-sync-drawer";
 import { CollapsibleSection } from "@/components/room/collapsible-section";
+import { DrawerSection } from "@/components/room/drawer-section";
 import { SelfCreateTeamForm } from "@/components/room/self-create-team-form";
 import { TradePanel } from "@/components/trades/trade-panel";
-import { DashboardAutoRefresher } from "@/components/dashboard-auto-refresher";
 import { SquadBoard } from "@/components/auction/squad-board";
 import { SoldPlayerShowcase } from "@/components/sold-player-showcase";
 import { hasServiceRoleEnv } from "@/lib/config";
@@ -80,7 +77,6 @@ export default async function RoomPage({
 
   return (
     <main className="shell">
-      <DashboardAutoRefresher roomId={snapshot.room.id} />
       <div className="nav">
         <div>
           <div className="brand"><SiteLogo suffix="Room" /></div>
@@ -114,7 +110,7 @@ export default async function RoomPage({
         <div className="header-row">
           <div>
             <span className="eyebrow">Room setup</span>
-            <h1 className="page-title" style={{ fontSize: "3.2rem", marginTop: "0.4rem" }}>
+            <h1 className="page-title" style={{ fontSize: "clamp(1.6rem, 6vw, 3.2rem)", marginTop: "0.4rem" }}>
               Get the room ready
             </h1>
           </div>
@@ -289,13 +285,21 @@ export default async function RoomPage({
       </section>
 
       {snapshot.currentMember.isAdmin && (
-        <section className="panel" style={{ marginTop: "1rem", borderColor: "rgba(183,121,31,0.3)", background: "rgba(183,121,31,0.04)" }}>
-          <h2 style={{ marginTop: 0 }}>Import past results</h2>
-          <p className="subtle" style={{ marginBottom: "1rem" }}>
-            Upload a completed auction sheet to fill teams, players, and squads in one step.
-          </p>
-          <ImportResultsForm roomCode={snapshot.room.code} />
-        </section>
+        <div style={{ marginTop: "1rem" }}>
+          <DrawerSection
+            title="Import past results"
+            eyebrow="Bulk upload"
+            summary={
+              <span className="subtle" style={{ fontSize: "0.82rem" }}>
+                Upload a completed auction sheet to fill teams, players, and squads in one step.
+              </span>
+            }
+            accentColor="rgba(183,121,31,0.3)"
+            width="min(600px, 100vw)"
+          >
+            <ImportResultsForm roomCode={snapshot.room.code} />
+          </DrawerSection>
+        </div>
       )}
 
 
@@ -315,42 +319,20 @@ export default async function RoomPage({
         </div>
       ) : null}
 
-      {/* ── Score Sync + Live Score Sync: all room admins ── */}
-      {snapshot.currentMember.isAdmin ? (
-        <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <CollapsibleSection
-            title="Score Sync"
-            eyebrow="Points management"
-            accentColor="rgba(99,102,241,0.3)"
-          >
-            <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
-              Reset clears all player points. Update Scores rebuilds from stored match data.
-            </p>
-            <PointsSyncPanel roomCode={snapshot.room.code} />
-          </CollapsibleSection>
-
-          <LiveScoreSyncDrawer
-            roomCode={snapshot.room.code}
-            initialProviders={[
-              { id: "rapidapi", label: "RapidAPI / Cricbuzz", configured: Boolean(process.env.RAPIDAPI_KEY || process.env.RAPIDAPI_KEY_2) },
-            ]}
-          />
-
-          <CollapsibleSection
-            title="Cricsheet Sync"
-            eyebrow="Ball-by-ball data"
-            accentColor="rgba(56,189,248,0.25)"
-          >
-            <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
-              Download the IPL season from Cricsheet and sync player stats into this room.
-            </p>
-            <CricsheetSyncButton roomCode={snapshot.room.code} />
-          </CollapsibleSection>
-        </div>
-      ) : null}
 
       <div style={{ marginTop: "1rem" }}>
-        <CollapsibleSection title="Dream Team Boards" eyebrow="Team-wise leaderboards" accentColor="rgba(255,255,255,0.1)">
+        <DrawerSection
+          title="Dream Team Boards"
+          eyebrow="Team-wise leaderboards"
+          summary={
+            <div className="pill-row" style={{ marginTop: "0.3rem" }}>
+              <span className="pill">{snapshot.teams.length} teams</span>
+              <span className="pill">{snapshot.squads.length} players bought</span>
+            </div>
+          }
+          accentColor="rgba(255,255,255,0.1)"
+          width="min(900px, 100vw)"
+        >
           <SquadBoard
             teams={snapshot.teams}
             squads={snapshot.squads}
@@ -361,25 +343,34 @@ export default async function RoomPage({
             isAdmin={snapshot.currentMember.isAdmin}
             scrollable={false}
           />
-        </CollapsibleSection>
+        </DrawerSection>
       </div>
 
       {snapshot.teams.length > 1 && (
-        <section className="panel" style={{ marginTop: "1rem" }}>
-          <h2 style={{ marginBottom: "0.2rem" }}>Player Trading</h2>
-          <p className="subtle" style={{ marginBottom: "1.25rem" }}>
-            Propose and accept player swaps between teams.
-          </p>
-          <TradePanel
-            currentUserId={snapshot.currentMember.userId}
-            isAdmin={snapshot.currentMember.isAdmin}
-            roomCode={snapshot.room.code}
-            squads={snapshot.squads}
-            teams={snapshot.teams}
-            players={snapshot.players}
-            trades={snapshot.trades}
-          />
-        </section>
+        <div style={{ marginTop: "1rem" }}>
+          <DrawerSection
+            title="Player Trading"
+            eyebrow="Propose and accept player swaps"
+            summary={
+              <div className="pill-row" style={{ marginTop: "0.3rem" }}>
+                <span className="pill">{snapshot.trades.length} trade{snapshot.trades.length !== 1 ? "s" : ""}</span>
+                <span className="pill">{snapshot.trades.filter((t) => t.status === "PENDING").length} pending</span>
+              </div>
+            }
+            accentColor="rgba(183,121,31,0.25)"
+            width="min(820px, 100vw)"
+          >
+            <TradePanel
+              currentUserId={snapshot.currentMember.userId}
+              isAdmin={snapshot.currentMember.isAdmin}
+              roomCode={snapshot.room.code}
+              squads={snapshot.squads}
+              teams={snapshot.teams}
+              players={snapshot.players}
+              trades={snapshot.trades}
+            />
+          </DrawerSection>
+        </div>
       )}
     </main>
   );

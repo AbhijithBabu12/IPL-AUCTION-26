@@ -56,14 +56,7 @@ IMPLEMENTATION.md
 CLAUDE.md
 XYZ.md
 changes.md
-scripts/simulate-reset-points.mjs
-scripts/restore-points.mjs
-scripts/investigate-points.mjs
-scripts/verify-leaderboard.mjs
-.gitignore
-scripts/rebuild-player-stats.mjs
-scripts/dedupe-check-timestamps.mjs
-scripts/check-player.mjs
-scripts/dedupe-sim.mjs
-scripts/recalc-stats-direct.mjs
-scripts/recalc-room.mjs
+PM.md
+
+# Simulation scripts
+scripts/

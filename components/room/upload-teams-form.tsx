@@ -4,7 +4,6 @@ import Papa from "papaparse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ChangeEvent } from "react";
-import * as XLSX from "xlsx";
 
 import { toErrorMessage } from "@/lib/utils";
 
@@ -28,6 +27,7 @@ async function readTabularRows(file: File) {
   }
 
   if (extension === "xlsx" || extension === "xls") {
+    const XLSX = await import("xlsx");
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];

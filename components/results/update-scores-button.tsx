@@ -49,34 +49,54 @@ export function UpdateScoresButton({ roomCode }: UpdateScoresButtonProps) {
     setMessage(null);
     setError(null);
     try {
-      const body: Record<string, string> = { season: "2026" };
-      if (selectedProvider !== "auto") body.provider = selectedProvider;
-
-      const res = await fetch(`/api/rooms/${roomCode}/auto-sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = (await res.json()) as {
-        ok: boolean;
-        error?: string;
-        matchesFetched?: number;
-        matchesAlreadyAccepted?: number;
-        playersUpdated?: number;
-        source?: string;
-      };
-      if (!res.ok || !data.ok) throw new Error(data.error ?? "Fetch failed.");
-
-      const fetched = data.matchesFetched ?? 0;
-      const skipped = data.matchesAlreadyAccepted ?? 0;
-      const updated = data.playersUpdated ?? 0;
-
-      if (fetched === 0 && skipped > 0) {
-        setMessage(`Already up to date — ${skipped} match(es) already accepted.`);
-      } else if (fetched === 0) {
-        setMessage("No new matches found from this provider.");
+      if (selectedProvider === "cricsheet") {
+        const res = await fetch(`/api/rooms/${roomCode}/cricsheet-sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ season: "2026" }),
+        });
+        const data = (await res.json()) as {
+          ok: boolean;
+          error?: string;
+          matchesProcessed?: number;
+          matchesAlreadyAccepted?: number;
+          playersMatched?: number;
+        };
+        if (!res.ok || !data.ok) throw new Error(data.error ?? "Cricsheet sync failed.");
+        const processed = data.matchesProcessed ?? 0;
+        const skipped = data.matchesAlreadyAccepted ?? 0;
+        if (processed === 0 && skipped > 0) {
+          setMessage(`Already up to date — ${skipped} match(es) already accepted.`);
+        } else {
+          setMessage(`Done — ${processed} matches synced, ${data.playersMatched ?? 0} players matched.`);
+        }
       } else {
-        setMessage(`Done — ${fetched} new match(es) synced, ${updated} players updated.`);
+        const body: Record<string, string> = { season: "2026" };
+        if (selectedProvider !== "auto") body.provider = selectedProvider;
+        const res = await fetch(`/api/rooms/${roomCode}/auto-sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = (await res.json()) as {
+          ok: boolean;
+          error?: string;
+          matchesFetched?: number;
+          matchesAlreadyAccepted?: number;
+          playersUpdated?: number;
+          source?: string;
+        };
+        if (!res.ok || !data.ok) throw new Error(data.error ?? "Fetch failed.");
+        const fetched = data.matchesFetched ?? 0;
+        const skipped = data.matchesAlreadyAccepted ?? 0;
+        const updated = data.playersUpdated ?? 0;
+        if (fetched === 0 && skipped > 0) {
+          setMessage(`Already up to date — ${skipped} match(es) already accepted.`);
+        } else if (fetched === 0) {
+          setMessage("No new matches found from this provider.");
+        } else {
+          setMessage(`Done — ${fetched} new match(es) synced, ${updated} players updated.`);
+        }
       }
       router.refresh();
     } catch (err) {

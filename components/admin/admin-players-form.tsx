@@ -8,7 +8,6 @@
 import Papa from "papaparse";
 import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
-import * as XLSX from "xlsx";
 
 import { toErrorMessage } from "@/lib/utils";
 
@@ -33,6 +32,7 @@ async function readTabularRows(file: File): Promise<Record<string, unknown>[]> {
     });
   }
   if (ext === "xlsx" || ext === "xls") {
+    const XLSX = await import("xlsx");
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
     const sheet = wb.Sheets[wb.SheetNames[0]!]!;

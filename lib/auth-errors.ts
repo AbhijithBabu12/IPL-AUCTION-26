@@ -7,11 +7,14 @@ export type LoginAuthErrorCode =
   | "email_not_confirmed"
   | "password_auth_not_enabled"
   | "email_taken"
-  | "credential_auth_failed";
+  | "credential_auth_failed"
+  | "reset_failed"
+  | "reset_rate_limited";
 
 export type LoginAuthNoticeCode =
   | "account_created"
-  | "check_email";
+  | "check_email"
+  | "password_reset_sent";
 
 export function sanitizeNextPath(next?: string | null) {
   return typeof next === "string" && next.startsWith("/") ? next : "/lobby";
@@ -80,6 +83,10 @@ export function getLoginAuthErrorMessage(errorCode?: string | null) {
       return "Email/password auth could not be completed. Check your Supabase auth settings and try again.";
     case "oauth_start_failed":
       return "Unable to start Google sign-in. Check the Supabase auth provider settings and redirect configuration.";
+    case "reset_failed":
+      return "Could not send the password reset email. Check the address and try again.";
+    case "reset_rate_limited":
+      return "Too many reset requests. Wait a few minutes before trying again.";
     default:
       return null;
   }
@@ -91,6 +98,8 @@ export function getLoginAuthNoticeMessage(noticeCode?: string | null) {
       return "Account created and signed in successfully.";
     case "check_email":
       return "Account created. Check your inbox if this Supabase project requires email confirmation before sign-in.";
+    case "password_reset_sent":
+      return "Password reset email sent. Check your inbox and follow the link to set a new password.";
     default:
       return null;
   }

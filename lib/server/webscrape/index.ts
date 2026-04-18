@@ -85,5 +85,10 @@ export function availableProviders(): Array<{ id: string; label: string; configu
       label: PROVIDER_LABELS.rapidapi,
       configured: isProviderConfigured("rapidapi"),
     },
+    {
+      id: "cricsheet",
+      label: "Cricsheet (ball-by-ball)",
+      configured: true, // always available — no API key required
+    },
   ];
 }

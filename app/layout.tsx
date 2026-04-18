@@ -205,6 +205,7 @@ export default async function RootLayout({
         />
       </head>
       <body className={`${displayFont.variable} ${bodyFont.variable}`}>
+        <a href="#main-content" className="skip-to-main">Skip to main content</a>
         <AmbientBackground />
         <IntroSplashWrapper />
         <AppSidebar user={user} />

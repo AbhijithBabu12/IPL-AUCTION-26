@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toErrorMessage } from "@/lib/utils";
 import { AdminPlayersForm } from "@/components/admin/admin-players-form";
 import { UploadTeamsForm } from "@/components/room/upload-teams-form";
+import { DrawerSection } from "@/components/room/drawer-section";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -366,7 +367,7 @@ function ScoreSyncTab() {
                   )}
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(sourceKeys.length, 1)}, 1fr)`, gap: "0.75rem" }}>
+                <div className="source-comparison-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(sourceKeys.length, 1)}, 1fr)`, gap: "0.75rem" }}>
                   {sourceKeys.map((srcKey) => {
                     const sd = match.sources[srcKey]!;
                     const top = topScorers(sd.calculatedPoints);
@@ -628,7 +629,8 @@ function RoomsTab() {
 
   return (
     <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+      <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem", minWidth: "600px" }}>
         <thead>
           <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
             {["Code", "Name", "Teams", "Players", "Members", "Phase", "Last Sync", ""].map((h) => (
@@ -659,6 +661,7 @@ function RoomsTab() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -1198,16 +1201,17 @@ function SuperadminTab() {
   const [superadmins, setSuperadmins] = useState<Array<{ id: string; email: string | null; display_name: string | null }>>([]);
   const [loading, setLoading] = useState(true);
   const [grantEmail, setGrantEmail] = useState("");
+  const [revokeEmail, setRevokeEmail] = useState("");
   const [granting, setGranting] = useState(false);
+  const [revoking, setRevoking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   async function loadAdmins() {
     try {
-      // We re-use the Supabase admin client indirectly through a dedicated endpoint
-      // For now we'll fetch from /api/admin/rooms which is available, but ideally
-      // a dedicated /api/admin/superadmins endpoint would be added.
-      // Here we show an explanation and manual SQL instructions.
-    } finally {
+      const res = await fetch("/api/admin/superadmin");
+      const data = (await res.json()) as { ok: boolean; superadmins?: typeof superadmins };
+      if (data.ok && data.superadmins) setSuperadmins(data.superadmins);
+    } catch { /* ignore */ } finally {
       setLoading(false);
     }
   }
@@ -1226,8 +1230,9 @@ function SuperadminTab() {
       });
       const data = (await res.json()) as { ok: boolean; error?: string; message?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed.");
-      setMessage(data.message ?? "Done.");
+      setMessage(data.message ?? "Access granted.");
       setGrantEmail("");
+      void loadAdmins();
     } catch (err) {
       setMessage(toErrorMessage(err));
     } finally {
@@ -1235,12 +1240,57 @@ function SuperadminTab() {
     }
   }
 
+  async function handleRevoke() {
+    if (!revokeEmail.trim()) return;
+    setRevoking(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/superadmin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: revokeEmail.trim(), grant: false }),
+      });
+      const data = (await res.json()) as { ok: boolean; error?: string; message?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed.");
+      setMessage(data.message ?? "Access revoked.");
+      setRevokeEmail("");
+      void loadAdmins();
+    } catch (err) {
+      setMessage(toErrorMessage(err));
+    } finally {
+      setRevoking(false);
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      {/* Current superadmins list */}
+      <div className="panel">
+        <h2 style={{ marginTop: 0 }}>Current Superadmins</h2>
+        {loading ? (
+          <p className="subtle">Loading…</p>
+        ) : superadmins.length === 0 ? (
+          <p className="subtle">No superadmins found.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem" }}>
+            {superadmins.map((sa) => (
+              <div key={sa.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.6rem 0.85rem", borderRadius: "10px", background: "rgba(99,102,241,0.07)", border: "1px solid rgba(99,102,241,0.14)" }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{sa.display_name ?? "—"}</div>
+                  <div className="subtle" style={{ fontSize: "0.8rem" }}>{sa.email ?? "—"}</div>
+                </div>
+                <span className="pill highlight" style={{ fontSize: "0.72rem" }}>Superadmin</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Grant */}
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Grant Superadmin Access</h2>
         <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
-          Enter an email address to grant superadmin access. The user must already have an account.
+          The user must already have an account.
         </p>
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           <div className="field" style={{ flex: 1, minWidth: "220px", marginBottom: 0 }}>
@@ -1255,27 +1305,31 @@ function SuperadminTab() {
             />
           </div>
           <button className="button" onClick={() => void handleGrant()} disabled={granting || !grantEmail.trim()} type="button" style={{ marginTop: "auto" }}>
-            {granting ? "Granting…" : "Grant superadmin"}
+            {granting ? "Granting…" : "Grant access"}
           </button>
         </div>
-        {message && <div className={`notice ${message.includes("Error") || message.includes("fail") ? "warning" : "success"}`} style={{ marginTop: "0.75rem" }}>{message}</div>}
+        {message && <div className={`notice ${message.toLowerCase().includes("error") || message.toLowerCase().includes("fail") ? "warning" : "success"}`} style={{ marginTop: "0.75rem" }}>{message}</div>}
       </div>
 
-      <div className="panel">
-        <h2 style={{ marginTop: 0 }}>Manual SQL (Supabase Dashboard)</h2>
-        <p className="subtle" style={{ fontSize: "0.85rem", marginBottom: "0.75rem" }}>
-          You can also manage superadmins directly in the Supabase SQL Editor:
-        </p>
-        <pre style={{ background: "rgba(0,0,0,0.3)", borderRadius: "6px", padding: "0.85rem", fontSize: "0.8rem", overflowX: "auto", border: "1px solid rgba(255,255,255,0.08)" }}>
-{`-- Grant
-UPDATE public.users SET is_superadmin = true WHERE email = 'user@example.com';
-
--- Revoke
-UPDATE public.users SET is_superadmin = false WHERE email = 'user@example.com';
-
--- List all superadmins
-SELECT id, email, display_name FROM public.users WHERE is_superadmin = true;`}
-        </pre>
+      {/* Revoke */}
+      <div className="panel" style={{ borderColor: "rgba(244,63,94,0.2)", background: "rgba(244,63,94,0.03)" }}>
+        <h2 style={{ marginTop: 0 }}>Revoke Superadmin Access</h2>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div className="field" style={{ flex: 1, minWidth: "220px", marginBottom: 0 }}>
+            <label>Email address</label>
+            <input
+              className="input"
+              type="email"
+              placeholder="user@example.com"
+              value={revokeEmail}
+              onChange={(e) => setRevokeEmail(e.target.value)}
+              disabled={revoking}
+            />
+          </div>
+          <button className="button danger" onClick={() => void handleRevoke()} disabled={revoking || !revokeEmail.trim()} type="button" style={{ marginTop: "auto" }}>
+            {revoking ? "Revoking…" : "Revoke access"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1529,21 +1583,7 @@ function SettingsTab() {
 
 // ── Main shell ────────────────────────────────────────────────────────────────
 
-type Tab = "sync" | "rooms" | "players" | "points" | "correction" | "admins" | "settings";
-
 export function AdminShell({ adminName }: { adminName: string }) {
-  const [activeTab, setActiveTab] = useState<Tab>("sync");
-
-  const tabs: Array<{ id: Tab; label: string }> = [
-    { id: "sync", label: "Score Sync" },
-    { id: "rooms", label: "Rooms" },
-    { id: "players", label: "Players & Teams" },
-    { id: "points", label: "Players & Points" },
-    { id: "correction", label: "Score Correction" },
-    { id: "admins", label: "Superadmins" },
-    { id: "settings", label: "Settings" },
-  ];
-
   return (
     <main className="shell" style={{ paddingTop: "2rem" }}>
       {/* Header */}
@@ -1551,7 +1591,7 @@ export function AdminShell({ adminName }: { adminName: string }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <span className="eyebrow">Internal</span>
-            <h1 className="page-title" style={{ fontSize: "2rem", marginTop: "0.3rem", marginBottom: 0 }}>
+            <h1 className="page-title" style={{ fontSize: "clamp(1.4rem, 4vw, 2rem)", marginTop: "0.3rem", marginBottom: 0 }}>
               IPL Auction — Admin Panel
             </h1>
           </div>
@@ -1562,39 +1602,64 @@ export function AdminShell({ adminName }: { adminName: string }) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "0" }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            type="button"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "0.6rem 1.1rem",
-              fontSize: "0.9rem",
-              fontWeight: activeTab === tab.id ? 600 : 400,
-              color: activeTab === tab.id ? "var(--accent, #7468ff)" : "var(--subtle, #888)",
-              borderBottom: activeTab === tab.id ? "2px solid var(--accent, #7468ff)" : "2px solid transparent",
-              marginBottom: "-1px",
-              transition: "color 0.15s",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Sections — each is an inline open/closable drawer */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+        <DrawerSection
+          title="Score Sync"
+          eyebrow="Cricsheet & Live data"
+          accentColor="rgba(56,189,248,0.22)"
+        >
+          <ScoreSyncTab />
+        </DrawerSection>
 
-      {/* Tab content */}
-      {activeTab === "sync" && <ScoreSyncTab />}
-      {activeTab === "rooms" && <RoomsTab />}
-      {activeTab === "players" && <PlayersTeamsTab />}
-      {activeTab === "points" && <PlayersPointsTab />}
-      {activeTab === "correction" && <ScoreCorrectionTab />}
-      {activeTab === "admins" && <SuperadminTab />}
-      {activeTab === "settings" && <SettingsTab />}
+        <DrawerSection
+          title="Rooms"
+          eyebrow="Room overview"
+          accentColor="rgba(99,102,241,0.2)"
+        >
+          <RoomsTab />
+        </DrawerSection>
+
+        <DrawerSection
+          title="Players & Teams"
+          eyebrow="Global player pool"
+          accentColor="rgba(99,102,241,0.2)"
+        >
+          <PlayersTeamsTab />
+        </DrawerSection>
+
+        <DrawerSection
+          title="Players & Points"
+          eyebrow="Per-room stats"
+          accentColor="rgba(251,191,36,0.2)"
+        >
+          <PlayersPointsTab />
+        </DrawerSection>
+
+        <DrawerSection
+          title="Score Correction"
+          eyebrow="Manual stat overrides"
+          accentColor="rgba(183,121,31,0.25)"
+        >
+          <ScoreCorrectionTab />
+        </DrawerSection>
+
+        <DrawerSection
+          title="Superadmins"
+          eyebrow="Access control"
+          accentColor="rgba(99,102,241,0.2)"
+        >
+          <SuperadminTab />
+        </DrawerSection>
+
+        <DrawerSection
+          title="Settings"
+          eyebrow="Feature flags & Danger zone"
+          accentColor="rgba(239,68,68,0.18)"
+        >
+          <SettingsTab />
+        </DrawerSection>
+      </div>
     </main>
   );
 }

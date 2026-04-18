@@ -14,7 +14,7 @@
 
   /* â”€â”€ Text â”€â”€ */
   --text: #e8eaf6;
-  --muted: #7986a8;
+  --muted: #8a96b8;
 
   /* â”€â”€ Accent Colours â”€â”€ */
   --primary: #6366f1;          /* electric indigo */
@@ -93,6 +93,10 @@ button { cursor: pointer; }
 
 @keyframes blink {
   0%, 80%, 100% { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .dot { animation: none; opacity: 1; }
+}
+
   40% { opacity: 1; }
 }
 
@@ -253,6 +257,31 @@ button { cursor: pointer; }
   transform: none;
   box-shadow: none;
 }
+/* Focus-visible outline keyboard navigation WCAG 2.4.7 */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+/* Skip-to-content link (WCAG 2.4.1) */
+.skip-to-main {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.75rem 1.25rem;
+  background: var(--primary);
+  color: #fff;
+  border-radius: 0 0 8px 8px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: top 0.15s ease;
+  text-decoration: none;
+}
+.skip-to-main:focus {
+  top: 0;
+}
+
+
 
 .button.secondary {
   background: linear-gradient(135deg, #059669, #10b981);
@@ -632,7 +661,7 @@ button { cursor: pointer; }
 
 .results-team-board-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: 1rem;
 }
 
@@ -980,9 +1009,18 @@ button { cursor: pointer; }
    RESPONSIVE
 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (max-width: 900px) {
-  .grid.two, .grid.three, .form-grid.two, .split, .leader-row, .auction-grid {
+  .grid.two, .grid.three, .form-grid.two, .split, .auction-grid {
     grid-template-columns: 1fr;
   }
+  /* Generic leader-row collapses, but results variant keeps structure */
+  .leader-row:not(.results-leader-row) { grid-template-columns: 1fr; }
+  /* Results leaderboard: compact 3-column at tablet */
+  .results-leader-row {
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    padding: 0.75rem 0.85rem;
+  }
+  .results-leader-row .results-leader-stat:last-child { display: none; }
   .shell { width: min(100vw - 1.25rem, 1180px); }
   .hero, .panel { padding: 1rem; }
 }
@@ -1439,6 +1477,12 @@ button { cursor: pointer; }
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* Admin panel drawer — wider than the default auction drawers */
+.drawer-panel-admin {
+  width: min(900px, 100vw);
+  padding: 1.5rem;
 }
 
 .drawer-header-row {
@@ -1985,6 +2029,15 @@ html {
   /* Bottom bid bar â€” stack two buttons per row */
   .auction-bottom-bar { flex-wrap: wrap; }
   .bid-button-lg { min-width: calc(50% - 0.2rem); font-size: 0.8rem; min-height: 42px; }
+
+  /* My-team player row: stack price + drop button below name on tiny screens */
+  .my-team-player-row {
+    grid-template-columns: 1fr !important;
+  }
+  .my-team-player-row > strong,
+  .my-team-player-row > button {
+    justify-self: start;
+  }
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -3664,6 +3717,7 @@ body[data-sidebar="collapsed"] .auction-full {
   body[data-sidebar="collapsed"] .shell {
     width: calc(100vw - 1.25rem);
     padding-left: 54px; /* clear the hamburger button */
+    padding-top: 3.75rem; /* clear the 40px hamburger at top: 0.8rem */
   }
 
   body[data-sidebar="on"] .auction-full,
@@ -3675,5 +3729,65 @@ body[data-sidebar="collapsed"] .auction-full {
   .auth-card {
     padding: 1.75rem 1.25rem;
   }
+
+  /* Nav — ensure button-row wraps */
+  .nav .button-row { flex-wrap: wrap; }
+
+  /* Admin shell tabs — horizontal scroll on mobile */
+  .admin-tab-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .admin-tab-bar::-webkit-scrollbar { display: none; }
+  .admin-tab-bar button { scroll-snap-align: start; white-space: nowrap; flex-shrink: 0; }
 }
 
+/* ── Narrow mobile (≤ 640px) — results specifics ── */
+@media (max-width: 640px) {
+  /* Leaderboard rank chip compact */
+  .results-rank-chip {
+    min-height: 36px;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.85rem;
+  }
+
+  /* Result overlay smaller */
+  .result-overlay { padding: 1.25rem 2.5rem; }
+
+  /* Webscrape panel source comparison — force single column on mobile */
+  .source-comparison-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* results-top-scorers list item font smaller */
+  .results-scorer-points { font-size: 0.95rem; }
+
+  /* Team boards fit full width */
+  .results-team-board-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Forgot-password expandable section */
+.forgot-password-details {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.forgot-password-details summary {
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--muted);
+  list-style: none;
+  transition: color 0.15s;
+}
+.forgot-password-details summary::-webkit-details-marker { display: none; }
+.forgot-password-details summary:hover { color: var(--text); }
+.forgot-password-details[open] summary { color: var(--text); }
+.forgot-password-details > .form-grid { padding: 0 1rem 1rem; }

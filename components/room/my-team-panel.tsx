@@ -114,6 +114,7 @@ export function MyTeamPanel({
               return (
                 <div
                   key={entry.id}
+                  className="my-team-player-row"
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr auto auto",

@@ -465,6 +465,7 @@ export function WebscrapeSyncPanel({ roomCode, initialProviders = [] }: Webscrap
 
             {/* Source comparison columns */}
             <div
+              className="source-comparison-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: `repeat(${Math.max(sourceKeys.length, 1)}, 1fr)`,

@@ -8,7 +8,7 @@ import {
   getLoginAuthNoticeMessage,
   sanitizeNextPath,
 } from "@/lib/auth-errors";
-import { signInWithPasswordAction } from "@/app/login/actions";
+import { signInWithPasswordAction, resetPasswordAction } from "@/app/login/actions";
 import { hasBrowserSupabaseEnv } from "@/lib/config";
 import { getSessionUser } from "@/lib/server/auth";
 
@@ -52,17 +52,17 @@ export default async function LoginPage({
         </div>
 
         {!hasBrowserSupabaseEnv && (
-          <div className="notice warning" style={{ marginBottom: "1rem" }}>
+          <div role="alert" className="notice warning" style={{ marginBottom: "1rem" }}>
             Sign in is not ready yet. Finish the app setup first.
           </div>
         )}
         {authError && (
-          <div className="notice warning" style={{ marginBottom: "1rem" }}>
+          <div role="alert" className="notice warning" style={{ marginBottom: "1rem" }}>
             {authError}
           </div>
         )}
         {authNotice && (
-          <div className="notice success" style={{ marginBottom: "1rem" }}>
+          <div role="status" className="notice success" style={{ marginBottom: "1rem" }}>
             {authNotice}
           </div>
         )}
@@ -103,7 +103,30 @@ export default async function LoginPage({
           </form>
         )}
 
-        <div className="auth-switch">
+        {hasBrowserSupabaseEnv && (
+          <details className="forgot-password-details">
+            <summary>Forgot your password?</summary>
+            <form action={resetPasswordAction} className="form-grid" style={{ marginTop: "0.75rem" }}>
+              <div className="field">
+                <label htmlFor="reset-email">Email address</label>
+                <input
+                  required
+                  autoComplete="email"
+                  className="input"
+                  id="reset-email"
+                  name="email"
+                  type="email"
+                  placeholder="you@example.com"
+                />
+              </div>
+              <button className="button ghost" type="submit" style={{ marginTop: "0.25rem" }}>
+                Send reset link
+              </button>
+            </form>
+          </details>
+        )}
+
+        <div className="auth-switch" style={{ marginTop: "0.5rem" }}>
           Don&apos;t have an account?{" "}
           <Link href={next !== "/lobby" ? `/signup?next=${encodeURIComponent(next)}` : "/signup"}>
             Create one

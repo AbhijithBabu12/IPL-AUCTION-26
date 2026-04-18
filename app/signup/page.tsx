@@ -52,17 +52,17 @@ export default async function SignupPage({
         </div>
 
         {!hasBrowserSupabaseEnv && (
-          <div className="notice warning" style={{ marginBottom: "1rem" }}>
+          <div role="alert" className="notice warning" style={{ marginBottom: "1rem" }}>
             Sign up is not ready yet. Finish the app setup first.
           </div>
         )}
         {authError && (
-          <div className="notice warning" style={{ marginBottom: "1rem" }}>
+          <div role="alert" className="notice warning" style={{ marginBottom: "1rem" }}>
             {authError}
           </div>
         )}
         {authNotice && (
-          <div className="notice success" style={{ marginBottom: "1rem" }}>
+          <div role="status" className="notice success" style={{ marginBottom: "1rem" }}>
             {authNotice}
           </div>
         )}

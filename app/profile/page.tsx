@@ -101,12 +101,12 @@ export default async function ProfilePage({
           <h2 style={{ marginTop: 0 }}>Edit profile</h2>
 
           {errorKey && ERRORS[errorKey] && (
-            <div className="notice warning" style={{ marginBottom: "1rem" }}>
+            <div role="alert" className="notice warning" style={{ marginBottom: "1rem" }}>
               {ERRORS[errorKey]}
             </div>
           )}
           {noticeKey && NOTICES[noticeKey] && (
-            <div className="notice success" style={{ marginBottom: "1rem" }}>
+            <div role="status" className="notice success" style={{ marginBottom: "1rem" }}>
               {NOTICES[noticeKey]}
             </div>
           )}

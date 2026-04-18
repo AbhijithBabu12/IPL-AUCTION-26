@@ -1,11 +1,12 @@
 "use client";
 
-import { motion, useReducedMotion, AnimatePresence } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 import { scorePlayer } from "@/lib/domain/scoring";
 import type { ResultsSnapshot } from "@/lib/domain/types";
 import { fadeUp, staggerContainer, spring, slideRight } from "@/lib/animations";
 import { AnimatedNumber } from "@/components/ui/animated-number";
+import { DrawerSection } from "@/components/room/drawer-section";
 import { formatCurrency, formatCurrencyShort } from "@/lib/utils";
 
 export function ResultsBoard({ snapshot }: { snapshot: ResultsSnapshot }) {
@@ -69,7 +70,7 @@ export function ResultsBoard({ snapshot }: { snapshot: ResultsSnapshot }) {
         </motion.span>
         <motion.h1
           className="page-title"
-          style={{ fontSize: "3rem", marginTop: "0.5rem" }}
+          style={{ fontSize: "clamp(1.6rem, 6vw, 3rem)", marginTop: "0.5rem" }}
           variants={reduced ? undefined : fadeUp}
         >
           {snapshot.room.name}
@@ -184,27 +185,31 @@ export function ResultsBoard({ snapshot }: { snapshot: ResultsSnapshot }) {
         </div>
       </section>
 
-      {/* Team boards */}
-      <section className="panel results-panel-accent">
-        <div className="results-panel-head">
-          <div>
-            <span className="eyebrow">Dream team boards</span>
-            <h2 style={{ marginBottom: "0.15rem" }}>Team-wise leaderboards</h2>
+      {/* Team boards — drawer */}
+      <DrawerSection
+        title="Team-wise leaderboards"
+        eyebrow="Dream team boards"
+        badge={topTeam ? (
+          <span className="pill" style={{ fontSize: "0.78rem" }}>
+            {topTeam.teamName} · {topTeam.totalPoints} pts
+          </span>
+        ) : null}
+        summary={
+          <div className="pill-row" style={{ marginTop: "0.3rem" }}>
+            <span className="pill">{rankedTeams.length} teams</span>
+            <span className="pill">{snapshot.squads.length} players sold</span>
           </div>
-          {topTeam ? (
-            <span className="pill">
-              Winning squad: {topTeam.teamName} • {topTeam.totalPoints} pts
-            </span>
-          ) : null}
-        </div>
+        }
+        accentColor="rgba(99,102,241,0.2)"
+        width="min(1100px, 100vw)"
+      >
         <div className="results-team-board-grid">
           {rankedTeams.map((teamScore) => (
             <motion.article
               className="results-team-card"
               key={teamScore.teamId}
               initial={reduced ? undefined : { opacity: 0, y: 12 }}
-              whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-30px" }}
+              animate={reduced ? undefined : { opacity: 1, y: 0 }}
               whileHover={reduced ? undefined : { y: -3, boxShadow: "0 16px 40px rgba(99,102,241,0.14)" }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             >
@@ -247,17 +252,22 @@ export function ResultsBoard({ snapshot }: { snapshot: ResultsSnapshot }) {
             </motion.article>
           ))}
         </div>
-      </section>
+      </DrawerSection>
 
-      {/* Squad archive + trade log */}
-      <section className="grid two">
-        <div className="panel results-panel-accent">
-          <div className="results-panel-head">
-            <div>
-              <span className="eyebrow">Squad archive</span>
-              <h2 style={{ marginBottom: "0.15rem" }}>All squads</h2>
+      {/* Squad archive + trade log — drawers */}
+      <div className="grid two">
+        <DrawerSection
+          title="All squads"
+          eyebrow="Squad archive"
+          summary={
+            <div className="pill-row" style={{ marginTop: "0.3rem" }}>
+              <span className="pill">{snapshot.teams.length} teams</span>
+              <span className="pill">{snapshot.squads.length} players</span>
             </div>
-          </div>
+          }
+          accentColor="rgba(255,255,255,0.08)"
+          width="min(680px, 100vw)"
+        >
           <div className="card-list">
             {snapshot.teams.map((team) => (
               <div className="trade-card results-squad-card" key={team.id}>
@@ -277,15 +287,19 @@ export function ResultsBoard({ snapshot }: { snapshot: ResultsSnapshot }) {
               </div>
             ))}
           </div>
-        </div>
+        </DrawerSection>
 
-        <div className="panel results-panel-accent">
-          <div className="results-panel-head">
-            <div>
-              <span className="eyebrow">Trade log</span>
-              <h2 style={{ marginBottom: "0.15rem" }}>Trade history</h2>
+        <DrawerSection
+          title="Trade history"
+          eyebrow="Trade log"
+          summary={
+            <div className="pill-row" style={{ marginTop: "0.3rem" }}>
+              <span className="pill">{snapshot.trades.length} trade{snapshot.trades.length !== 1 ? "s" : ""}</span>
             </div>
-          </div>
+          }
+          accentColor="rgba(255,255,255,0.08)"
+          width="min(560px, 100vw)"
+        >
           {snapshot.trades.length === 0 ? (
             <div className="empty-state">No trades have been executed yet.</div>
           ) : (
@@ -309,8 +323,8 @@ export function ResultsBoard({ snapshot }: { snapshot: ResultsSnapshot }) {
               ))}
             </div>
           )}
-        </div>
-      </section>
+        </DrawerSection>
+      </div>
     </div>
   );
 }

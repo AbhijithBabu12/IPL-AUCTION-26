@@ -1,6 +1,5 @@
 "use client";
 
-import * as XLSX from "xlsx";
 import { useRef, useState } from "react";
 
 import { toErrorMessage } from "@/lib/utils";
@@ -11,41 +10,41 @@ interface PreviewData {
   unsoldTotal: number;
 }
 
-function previewWorkbook(file: File): Promise<PreviewData> {
-  return file.arrayBuffer().then((buf) => {
-    const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
-    const unsoldSheetName =
-      wb.SheetNames.find((n) =>
-        ["Unsold Players", "Excel", "Excel", "Unsold"].some(
-          (candidate) => candidate.toLowerCase() === n.toLowerCase(),
-        ),
-      ) ?? null;
-    const teamSheets = wb.SheetNames.filter((n) => n !== unsoldSheetName);
+async function previewWorkbook(file: File): Promise<PreviewData> {
+  const XLSX = await import("xlsx");
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
+  const unsoldSheetName =
+    wb.SheetNames.find((n) =>
+      ["Unsold Players", "Excel", "Excel", "Unsold"].some(
+        (candidate) => candidate.toLowerCase() === n.toLowerCase(),
+      ),
+    ) ?? null;
+  const teamSheets = wb.SheetNames.filter((n) => n !== unsoldSheetName);
 
-    let soldTotal = 0;
-    for (const name of teamSheets) {
-      const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name]!, {
+  let soldTotal = 0;
+  for (const name of teamSheets) {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name]!, {
+      header: 1,
+      defval: "",
+    });
+    soldTotal += rows
+      .slice(1)
+      .filter((r) => typeof (r as unknown[])[0] === "number" && (r as unknown[])[1])
+      .length;
+  }
+
+  const unsoldRows = unsoldSheetName && wb.Sheets[unsoldSheetName]
+    ? XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[unsoldSheetName]!, {
         header: 1,
         defval: "",
-      });
-      soldTotal += rows
-        .slice(1)
-        .filter((r) => typeof (r as unknown[])[0] === "number" && (r as unknown[])[1])
-        .length;
-    }
+      })
+    : [];
+  const unsoldTotal = unsoldRows
+    .slice(1)
+    .filter((r) => typeof (r as unknown[])[0] === "number" && (r as unknown[])[1]).length;
 
-    const unsoldRows = unsoldSheetName && wb.Sheets[unsoldSheetName]
-      ? XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[unsoldSheetName]!, {
-          header: 1,
-          defval: "",
-        })
-      : [];
-    const unsoldTotal = unsoldRows
-      .slice(1)
-      .filter((r) => typeof (r as unknown[])[0] === "number" && (r as unknown[])[1]).length;
-
-    return { teams: teamSheets, soldTotal, unsoldTotal };
-  });
+  return { teams: teamSheets, soldTotal, unsoldTotal };
 }
 
 export function ImportResultsForm({ roomCode }: { roomCode: string }) {

@@ -2,23 +2,26 @@
 
 import { useId, useState } from "react";
 
-interface CollapsibleSectionProps {
+interface DrawerSectionProps {
   title: string;
   eyebrow?: string;
-  badge?: string;
-  defaultOpen?: boolean;
+  badge?: React.ReactNode;
+  summary?: React.ReactNode;
   accentColor?: string;
+  width?: string;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }
 
-export function CollapsibleSection({
+export function DrawerSection({
   title,
   eyebrow,
   badge,
+  summary,
+  accentColor = "rgba(99,102,241,0.18)",
   defaultOpen = false,
-  accentColor = "rgba(99,102,241,0.2)",
   children,
-}: CollapsibleSectionProps) {
+}: DrawerSectionProps) {
   const bodyId = useId();
   const [open, setOpen] = useState(defaultOpen);
 
@@ -30,7 +33,7 @@ export function CollapsibleSection({
         overflow: "hidden",
       }}
     >
-      {/* Drawer header — always visible */}
+      {/* Trigger header — always visible */}
       <button
         type="button"
         aria-expanded={open}
@@ -40,14 +43,17 @@ export function CollapsibleSection({
           width: "100%",
           display: "flex",
           alignItems: "center",
-          gap: "0.6rem",
+          gap: "0.75rem",
           padding: "0.9rem 1.2rem",
-          background: open ? `color-mix(in srgb, ${accentColor} 60%, transparent)` : "rgba(255,255,255,0.01)",
+          background: open
+            ? `color-mix(in srgb, ${accentColor} 60%, transparent)`
+            : "rgba(255,255,255,0.01)",
           border: "none",
           borderBottom: open ? `1px solid ${accentColor}` : "none",
           cursor: "pointer",
           textAlign: "left",
           transition: "background 0.15s",
+          flexWrap: "wrap",
         }}
       >
         {eyebrow && (
@@ -55,17 +61,15 @@ export function CollapsibleSection({
             {eyebrow}
           </span>
         )}
-        <span style={{ fontWeight: 600, fontSize: "1rem", flex: 1, color: "var(--foreground, #fff)" }}>
+        <span
+          style={{ fontWeight: 600, fontSize: "1rem", flex: 1, color: "var(--foreground, #fff)", minWidth: 0 }}
+        >
           {title}
         </span>
-        {badge && (
-          <span
-            className="pill"
-            style={{ fontSize: "0.72rem", background: "rgba(99,102,241,0.15)" }}
-          >
-            {badge}
-          </span>
+        {summary && (
+          <span style={{ fontSize: "0.82rem", color: "var(--muted)" }}>{summary}</span>
         )}
+        {badge && <span>{badge}</span>}
         {/* Chevron */}
         <svg
           width="16"
