@@ -6,7 +6,6 @@ import { ResultsExportBar } from "@/components/results/results-export-bar";
 import { ResultsResetButton } from "@/components/results/results-reset-button";
 import { UpdateScoresButton } from "@/components/results/update-scores-button";
 import { CollapsibleSection } from "@/components/room/collapsible-section";
-import { CricsheetSyncButton } from "@/components/room/cricsheet-sync-button";
 import { LiveScoreSyncDrawer } from "@/components/room/live-score-sync-drawer";
 import { PointsSyncPanel } from "@/components/room/points-sync-panel";
 import { hasServiceRoleEnv } from "@/lib/config";
@@ -110,16 +109,6 @@ export default async function ResultsPage({
             ]}
           />
 
-          <CollapsibleSection
-            title="Cricsheet Sync"
-            eyebrow="Ball-by-ball data"
-            accentColor="rgba(56,189,248,0.25)"
-          >
-            <p className="subtle" style={{ marginBottom: "1rem", fontSize: "0.88rem" }}>
-              Download the IPL season from Cricsheet and sync player stats into this room.
-            </p>
-            <CricsheetSyncButton roomCode={snapshot.room.code} />
-          </CollapsibleSection>
         </div>
       ) : null}
     </main>

@@ -12,7 +12,6 @@ import { CollapsibleSection } from "@/components/room/collapsible-section";
 import { DrawerSection } from "@/components/room/drawer-section";
 import { SelfCreateTeamForm } from "@/components/room/self-create-team-form";
 import { TradePanel } from "@/components/trades/trade-panel";
-import { SquadBoard } from "@/components/auction/squad-board";
 import { SoldPlayerShowcase } from "@/components/sold-player-showcase";
 import { hasServiceRoleEnv } from "@/lib/config";
 import { requireSessionUser } from "@/lib/server/auth";
@@ -320,33 +319,7 @@ export default async function RoomPage({
       ) : null}
 
 
-      <div style={{ marginTop: "1rem" }}>
-        <DrawerSection
-          title="Dream Team Boards"
-          eyebrow="Team-wise leaderboards"
-          summary={
-            <div className="pill-row" style={{ marginTop: "0.3rem" }}>
-              <span className="pill">{snapshot.teams.length} teams</span>
-              <span className="pill">{snapshot.squads.length} players bought</span>
-            </div>
-          }
-          accentColor="rgba(255,255,255,0.1)"
-          width="min(900px, 100vw)"
-        >
-          <SquadBoard
-            teams={snapshot.teams}
-            squads={snapshot.squads}
-            players={snapshot.players}
-            roomCode={snapshot.room.code}
-            phase={snapshot.auctionState?.phase ?? "WAITING"}
-            currentUserId={snapshot.user?.id ?? null}
-            isAdmin={snapshot.currentMember.isAdmin}
-            scrollable={false}
-          />
-        </DrawerSection>
-      </div>
-
-      {snapshot.teams.length > 1 && (
+{snapshot.teams.length > 1 && (
         <div style={{ marginTop: "1rem" }}>
           <DrawerSection
             title="Player Trading"
